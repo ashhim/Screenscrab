@@ -3,6 +3,8 @@ import 'dart:typed_data';
 
 enum MessageType {
   hello,
+  capabilities,
+  frameMetadata,
   sessionStart,
   sessionStop,
   videoFrame,
@@ -14,6 +16,7 @@ enum MessageType {
   deviceList,
   ping,
   pong,
+  disconnect,
   error,
 }
 

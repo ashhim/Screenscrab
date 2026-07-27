@@ -19,6 +19,9 @@ enum class ScreencrabEngineMode : std::uint8_t {
 };
 
 SCRSCRAB_API const char* screencrab_engine_version();
+SCRSCRAB_API std::uint32_t screencrab_engine_api_version();
+SCRSCRAB_API std::uint32_t screencrab_engine_protocol_version();
+SCRSCRAB_API const char* screencrab_engine_capabilities_json();
 SCRSCRAB_API void* screencrab_engine_create();
 SCRSCRAB_API void screencrab_engine_destroy(void* engine);
 SCRSCRAB_API int screencrab_engine_start_host(void* engine, const char* device_name);

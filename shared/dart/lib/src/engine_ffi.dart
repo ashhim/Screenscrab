@@ -20,6 +20,8 @@ typedef _LastErrorNative = ffi.Int32 Function(ffi.Pointer<ffi.Void>);
 typedef _StatusNative = ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Void>);
 typedef _VersionNative = ffi.Pointer<ffi.Char> Function();
 typedef _MessageNative = ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Void>);
+typedef _VersionValueNative = ffi.Uint32 Function();
+typedef _CapabilitiesNative = ffi.Pointer<ffi.Char> Function();
 
 @immutable
 class EngineLibrary {
@@ -79,6 +81,11 @@ class EngineLibrary {
         library.lookupFunction<_LastErrorNative, int Function(ffi.Pointer<ffi.Void>)>('screencrab_engine_last_error');
     final String Function() version =
         () => library.lookupFunction<_VersionNative, ffi.Pointer<ffi.Char> Function()>('screencrab_engine_version')().cast<Utf8>().toDartString();
+    final int Function() apiVersion = library.lookupFunction<_VersionValueNative, int Function()>('screencrab_engine_api_version');
+    final int Function() protocolVersion =
+        library.lookupFunction<_VersionValueNative, int Function()>('screencrab_engine_protocol_version');
+    final String Function() capabilitiesJson =
+        () => library.lookupFunction<_CapabilitiesNative, ffi.Pointer<ffi.Char> Function()>('screencrab_engine_capabilities_json')().cast<Utf8>().toDartString();
     final String Function(ffi.Pointer<ffi.Void>) statusJson = (ffi.Pointer<ffi.Void> handle) {
       final ffi.Pointer<ffi.Char> ptr =
           library.lookupFunction<_StatusNative, ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Void>)>(
@@ -101,6 +108,9 @@ class EngineLibrary {
       stop: stop,
       lastError: lastError,
       version: version,
+      apiVersion: apiVersion,
+      protocolVersion: protocolVersion,
+      capabilitiesJson: capabilitiesJson,
       statusJson: statusJson,
       lastErrorMessage: lastErrorMessage,
     );
@@ -127,6 +137,9 @@ class EngineBindings {
     required this.stop,
     required this.lastError,
     required this.version,
+    required this.apiVersion,
+    required this.protocolVersion,
+    required this.capabilitiesJson,
     required this.statusJson,
     required this.lastErrorMessage,
   });
@@ -138,6 +151,9 @@ class EngineBindings {
   final int Function(ffi.Pointer<ffi.Void>) stop;
   final int Function(ffi.Pointer<ffi.Void>) lastError;
   final String Function() version;
+  final int Function() apiVersion;
+  final int Function() protocolVersion;
+  final String Function() capabilitiesJson;
   final String Function(ffi.Pointer<ffi.Void>) statusJson;
   final String Function(ffi.Pointer<ffi.Void>) lastErrorMessage;
 }

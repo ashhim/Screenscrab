@@ -49,6 +49,52 @@ class EngineRuntimeStatus {
 }
 
 @immutable
+class EngineCapabilities {
+  const EngineCapabilities({
+    required this.capture,
+    required this.encode,
+    required this.transport,
+    required this.input,
+    required this.clipboard,
+    required this.fileTransfer,
+    required this.audio,
+    required this.multiMonitor,
+    required this.lockedScreen,
+    required this.hostMode,
+    required this.clientMode,
+  });
+
+  final bool capture;
+  final bool encode;
+  final bool transport;
+  final bool input;
+  final bool clipboard;
+  final bool fileTransfer;
+  final bool audio;
+  final bool multiMonitor;
+  final bool lockedScreen;
+  final bool hostMode;
+  final bool clientMode;
+
+  factory EngineCapabilities.fromJson(Map<String, dynamic> json) {
+    bool readFlag(String key) => json[key] as bool? ?? false;
+    return EngineCapabilities(
+      capture: readFlag('capture'),
+      encode: readFlag('encode'),
+      transport: readFlag('transport'),
+      input: readFlag('input'),
+      clipboard: readFlag('clipboard'),
+      fileTransfer: readFlag('fileTransfer'),
+      audio: readFlag('audio'),
+      multiMonitor: readFlag('multiMonitor'),
+      lockedScreen: readFlag('lockedScreen'),
+      hostMode: readFlag('hostMode'),
+      clientMode: readFlag('clientMode'),
+    );
+  }
+}
+
+@immutable
 class DeviceEndpoint {
   const DeviceEndpoint({
     required this.deviceId,

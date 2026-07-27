@@ -10,6 +10,12 @@
 
 namespace {
 constexpr const char kVersion[] = "0.1.0";
+constexpr std::uint32_t kApiVersion = 1;
+constexpr std::uint32_t kProtocolVersion = 1;
+constexpr const char kCapabilities[] =
+    "{\"capture\":true,\"encode\":true,\"transport\":true,\"input\":true,"
+    "\"clipboard\":true,\"fileTransfer\":true,\"audio\":true,\"multiMonitor\":true,"
+    "\"lockedScreen\":true,\"hostMode\":true,\"clientMode\":true}";
 }
 
 struct screenscrab::native::EngineHandle {
@@ -19,6 +25,18 @@ struct screenscrab::native::EngineHandle {
 
 const char* screencrab_engine_version() {
   return kVersion;
+}
+
+std::uint32_t screencrab_engine_api_version() {
+  return kApiVersion;
+}
+
+std::uint32_t screencrab_engine_protocol_version() {
+  return kProtocolVersion;
+}
+
+const char* screencrab_engine_capabilities_json() {
+  return kCapabilities;
 }
 
 void* screencrab_engine_create() {

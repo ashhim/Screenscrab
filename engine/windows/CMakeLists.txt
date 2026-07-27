@@ -28,3 +28,22 @@ target_include_directories(screencrab_engine
 
 target_compile_definitions(screencrab_engine PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_link_libraries(screencrab_engine PRIVATE ws2_32 d3d11 dxgi ole32 gdi32 user32 winmm avrt)
+
+set_target_properties(screencrab_engine PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/out"
+  RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_CURRENT_BINARY_DIR}/out"
+  RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_CURRENT_BINARY_DIR}/out"
+  RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_CURRENT_BINARY_DIR}/out"
+  RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${CMAKE_CURRENT_BINARY_DIR}/out"
+)
+
+set(SCRSCRAB_APP_RELEASE_DIR "" CACHE PATH "Optional Flutter Windows release output directory")
+if(SCRSCRAB_APP_RELEASE_DIR)
+  add_custom_command(TARGET screencrab_engine POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${SCRSCRAB_APP_RELEASE_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      "$<TARGET_FILE:screencrab_engine>"
+      "${SCRSCRAB_APP_RELEASE_DIR}/screencrab_engine.dll"
+    VERBATIM
+  )
+endif()

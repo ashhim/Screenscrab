@@ -65,6 +65,9 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
     lastErrorMessage: '',
   );
   String _engineVersion = 'unknown';
+  int _apiVersion = 0;
+  int _protocolVersion = 0;
+  EngineCapabilities? _capabilities;
   String _diagnosticMessage = 'Starting diagnostics...';
   bool _tailscaleCommandPresent = false;
   bool _busy = false;
@@ -99,6 +102,9 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
   Future<void> _refreshDiagnostics() async {
     final EngineRuntimeStatus? status = _engine.currentStatus();
     final String version = _engine.version ?? 'not-loaded';
+    final int apiVersion = _engine.apiVersion;
+    final int protocolVersion = _engine.protocolVersion;
+    final EngineCapabilities? capabilities = _engine.capabilities;
     final String message = _engine.lastErrorMessage ?? 'ok';
     bool tailscalePresent = false;
 
@@ -119,6 +125,9 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
         _connectionState = status.sessionActive ? ConnectionStateValue.connected : ConnectionStateValue.disconnected;
       }
       _engineVersion = version;
+      _apiVersion = apiVersion;
+      _protocolVersion = protocolVersion;
+      _capabilities = capabilities;
       _diagnosticMessage = message;
       _tailscaleCommandPresent = tailscalePresent;
     });
@@ -322,6 +331,8 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
                 _StatusChip(label: 'Audio', value: _status.audioReady),
               ],
             ),
+            const SizedBox(height: 8),
+            Text('API v$_apiVersion | Wire v$_protocolVersion'),
             const SizedBox(height: 16),
             ListTile(
               contentPadding: EdgeInsets.zero,
@@ -331,6 +342,22 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
             ),
             Text('Native message: ${_status.lastErrorMessage.isEmpty ? _diagnosticMessage : _status.lastErrorMessage}'),
             Text('UI state: ${_connectionState.name}'),
+            if (_capabilities != null) ...<Widget>[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: <Widget>[
+                  _TextChip('Video', _capabilities!.capture),
+                  _TextChip('Encode', _capabilities!.encode),
+                  _TextChip('Input', _capabilities!.input),
+                  _TextChip('Clipboard', _capabilities!.clipboard),
+                  _TextChip('Files', _capabilities!.fileTransfer),
+                  _TextChip('Audio', _capabilities!.audio),
+                  _TextChip('Monitors', _capabilities!.multiMonitor),
+                ],
+              ),
+            ],
             const SizedBox(height: 12),
             ExpansionTile(
               title: const Text('Discovered devices'),
@@ -365,5 +392,17 @@ class _StatusChip extends StatelessWidget {
       avatar: Icon(value ? Icons.check_circle : Icons.cancel, size: 18),
       label: Text('$label: ${value ? 'yes' : 'no'}'),
     );
+  }
+}
+
+class _TextChip extends StatelessWidget {
+  const _TextChip(this.label, this.value);
+
+  final String label;
+  final bool value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Chip(label: Text('$label: ${value ? 'yes' : 'no'}'));
   }
 }

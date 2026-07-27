@@ -5,14 +5,10 @@ import 'package:screenscrab_shared/screenscrab_shared.dart';
 
 class ScreenscrabEngineBridge {
   Future<void> initialize() async {
-    if (_library != null) {
-      return;
-    }
     final EngineLibrary? library = EngineLibrary.openDefault();
     if (library == null) {
       return;
     }
-    _library = library;
     _bindings = library.bind();
     _handle = _bindings!.create();
   }
@@ -47,6 +43,16 @@ class ScreenscrabEngineBridge {
   }
 
   String? get version => _bindings == null ? null : _bindings!.version();
+  int get apiVersion => _bindings == null ? 0 : _bindings!.apiVersion();
+  int get protocolVersion => _bindings == null ? 0 : _bindings!.protocolVersion();
+  EngineCapabilities? get capabilities {
+    if (_bindings == null) {
+      return null;
+    }
+    return EngineCapabilities.fromJson(
+      jsonDecode(_bindings!.capabilitiesJson()) as Map<String, dynamic>,
+    );
+  }
   String? get lastErrorMessage => _bindings == null || _handle == null ? null : _bindings!.lastErrorMessage(_handle!);
 
   void dispose() {
@@ -55,10 +61,8 @@ class ScreenscrabEngineBridge {
       _handle = null;
     }
     _bindings = null;
-    _library = null;
   }
 
-  EngineLibrary? _library;
   EngineBindings? _bindings;
   ffi.Pointer<ffi.Void>? _handle;
 }

@@ -10,11 +10,13 @@ if (Get-Command cmake -ErrorAction SilentlyContinue) {
     $appOut = Join-Path $PWD "apps\windows\build\windows\x64\runner\Release"
     New-Item -ItemType Directory -Force -Path $engineBuild | Out-Null
     New-Item -ItemType Directory -Force -Path $engineOut | Out-Null
-    cmake -S $engineRoot -B $engineBuild -DCMAKE_BUILD_TYPE=Release
+    Push-Location "apps/windows"
+    flutter build windows --release
+    Pop-Location
+    cmake -S $engineRoot -B $engineBuild -DCMAKE_BUILD_TYPE=Release -DSCRSCRAB_APP_RELEASE_DIR="$appOut"
     cmake --build $engineBuild --config Release
-    $dll = Get-ChildItem -Path $engineBuild -Recurse -Filter screencrab_engine.dll | Select-Object -First 1
+    $dll = Get-ChildItem -Path $engineOut -Filter screencrab_engine.dll | Select-Object -First 1
     if ($null -ne $dll) {
-        Copy-Item $dll.FullName (Join-Path $engineOut "screencrab_engine.dll") -Force
         if (Test-Path $appOut) {
             Copy-Item $dll.FullName (Join-Path $appOut "screencrab_engine.dll") -Force
         }
@@ -24,10 +26,8 @@ if (Get-Command cmake -ErrorAction SilentlyContinue) {
     Write-Host "Native engine build complete."
 } else {
     Write-Warning "CMake is not installed. Skipping native engine build."
+    Push-Location "apps/windows"
+    flutter build windows --release
+    Pop-Location
+    Write-Host "Windows Flutter build complete."
 }
-
-Push-Location "apps/windows"
-flutter build windows --release
-Pop-Location
-
-Write-Host "Windows Flutter build complete."
