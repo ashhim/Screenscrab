@@ -36,7 +36,6 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
   final AndroidScreenscrabBridge _bridge = AndroidScreenscrabBridge();
   late final RemoteSessionClient _client;
   final TextEditingController _clipboardController = TextEditingController();
-  final List<DeviceEndpoint> _hosts = <DeviceEndpoint>[];
   final List<NetworkPeer> _runtimePeers = <NetworkPeer>[];
 
   Timer? _timer;
@@ -127,30 +126,23 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
           deviceName: 'Screenscrab Android',
           signedIn: _state == ConnectionStateValue.connected,
         ),
-        peers:
-            _runtimePeers.isEmpty
-                ? _hosts
-                    .map(
-                      (DeviceEndpoint device) => NetworkPeer(
-                        name: device.name,
-                        address: device.address,
-                        online: true,
-                      ),
-                    )
-                    .toList(growable: false)
-                : _runtimePeers,
+        peers: _runtimePeers,
         lastError: _lastStatus,
       );
     });
   }
 
-  Future<void> _connect() async {
-    await _client.connect(host: 'screenscrab-host.local', port: 4545);
+  Future<void> _connectToPeer(NetworkPeer peer) async {
+    await _client.connect(
+      host: peer.address.isEmpty ? peer.name : peer.address,
+      port: 4545,
+    );
     if (!mounted) {
       return;
     }
     setState(() {
-      _lastAction = 'Connecting to discovered host';
+      _lastAction =
+          'Connecting to ${peer.name.isEmpty ? peer.address : peer.name}';
       _lastStatus = 'Connection requested';
     });
   }
@@ -413,15 +405,17 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
                   const SizedBox(height: 12),
                   Text(
                     _tailnetStatus.identity.signedIn
-                        ? 'Signed in and ready to connect to a discovered peer.'
-                        : 'Sign in by joining the embedded tailnet and then connect to a peer from the list below.',
+                        ? 'Signed in and ready to connect to a discovered peer from the list below.'
+                        : 'Join the embedded tailnet first, then pick a peer from the list below to connect.',
                   ),
                   const SizedBox(height: 12),
                   Row(
                     children: <Widget>[
                       FilledButton(
-                        onPressed: _connect,
-                        child: const Text('Connect'),
+                        onPressed: () async {
+                          await _refresh();
+                        },
+                        child: const Text('Refresh'),
                       ),
                       const SizedBox(width: 12),
                       OutlinedButton(
@@ -485,30 +479,28 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
-                    'Discovered hosts',
+                    'Discovered peers',
                     style: theme.textTheme.headlineSmall,
                   ),
                   const SizedBox(height: 12),
-                  if (_hosts.isEmpty)
+                  if (_tailnetStatus.peers.isEmpty)
                     Text(
                       'Peers will appear here after the embedded runtime discovers them.',
                     )
                   else
-                    for (final DeviceEndpoint device in _hosts)
+                    for (final NetworkPeer peer in _tailnetStatus.peers)
                       ListTile(
                         contentPadding: EdgeInsets.zero,
                         leading: const Icon(Icons.computer),
-                        title: Text(device.name),
+                        title: Text(
+                          peer.name.isEmpty ? peer.address : peer.name,
+                        ),
                         subtitle: Text(
-                          '${device.address} | ${device.mode.name}',
+                          '${peer.address.isEmpty ? 'pending' : peer.address} | ${peer.online ? 'online' : 'offline'}',
                         ),
                         trailing: FilledButton.tonal(
-                          onPressed:
-                              () => _client.connect(
-                                host: device.address,
-                                port: 4545,
-                              ),
-                          child: const Text('Open'),
+                          onPressed: () => _connectToPeer(peer),
+                          child: const Text('Connect'),
                         ),
                       ),
                 ],

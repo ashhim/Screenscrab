@@ -298,7 +298,7 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
             Text('Session Dashboard', style: theme.textTheme.headlineSmall),
             const SizedBox(height: 12),
             Text(
-              'Embedded Tailscale sign-in will appear here after the runtime is ready.',
+              'Use the embedded runtime to sign in, review your identity, and connect to discovered peers.',
               style: theme.textTheme.bodyMedium,
             ),
             const SizedBox(height: 16),
