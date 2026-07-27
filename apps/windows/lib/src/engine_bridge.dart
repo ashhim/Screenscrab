@@ -55,6 +55,35 @@ class ScreenscrabEngineBridge {
   }
   String? get lastErrorMessage => _bindings == null || _handle == null ? null : _bindings!.lastErrorMessage(_handle!);
 
+  NetworkRuntimeStatus? runtimeStatus() {
+    if (_bindings == null || _handle == null) {
+      return null;
+    }
+    final String statusJson = _bindings!.runtimeStatusJson(_handle!);
+    return NetworkRuntimeStatus.fromJson(jsonDecode(statusJson) as Map<String, dynamic>);
+  }
+
+  Future<void> beginSignIn() async {
+    if (_bindings == null || _handle == null) {
+      return;
+    }
+    _bindings!.beginSignIn(_handle!);
+  }
+
+  Future<void> refreshRuntime() async {
+    if (_bindings == null || _handle == null) {
+      return;
+    }
+    _bindings!.refresh(_handle!);
+  }
+
+  Future<void> connectPeer(String peerName, int port) async {
+    if (_bindings == null || _handle == null) {
+      return;
+    }
+    _bindings!.connectPeer(_handle!, peerName, port);
+  }
+
   void dispose() {
     if (_bindings != null && _handle != null) {
       _bindings!.destroy(_handle!);

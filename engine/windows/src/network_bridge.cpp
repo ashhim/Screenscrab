@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cctype>
+#include <cstdlib>
 #include <filesystem>
 #include <memory>
 #include <sstream>
@@ -52,6 +53,7 @@ using NetworkGetStatusFn = char* (*)();
 using NetworkGetIdentityFn = char* (*)();
 using NetworkGetPeersFn = char* (*)();
 using NetworkGetLastErrorFn = char* (*)();
+using NetworkConnectPeerFn = int (*)(const char*, std::uint16_t);
 using NetworkFreeBufferFn = void (*)(void*);
 
 bool load_runtime_library(HMODULE& module, std::string& error) {
@@ -97,6 +99,34 @@ std::string extract_json_bool(const std::string& json, const std::string& key) {
     return {};
   }
   return json.substr(begin, end - begin);
+}
+
+std::string escape_json_string(const std::string& value) {
+  std::string escaped;
+  escaped.reserve(value.size());
+  for (const char ch : value) {
+    switch (ch) {
+      case '\\':
+        escaped += "\\\\";
+        break;
+      case '"':
+        escaped += "\\\"";
+        break;
+      case '\n':
+        escaped += "\\n";
+        break;
+      case '\r':
+        escaped += "\\r";
+        break;
+      case '\t':
+        escaped += "\\t";
+        break;
+      default:
+        escaped.push_back(ch);
+        break;
+    }
+  }
+  return escaped;
 }
 
 bool parse_status_json(const std::string& status_json, NativeStatus& out) {
@@ -205,11 +235,89 @@ void NetworkBridge::stop() {
 
 bool NetworkBridge::begin_sign_in() {
   std::scoped_lock lock(mutex_);
-  if (!refresh_status(*this)) {
-    last_error_message_ = "sign-in flow pending embedded Go runtime";
+  static HMODULE module = nullptr;
+  static bool tried_load = false;
+  static std::string load_error;
+  if (!tried_load) {
+    tried_load = true;
+    if (!load_runtime_library(module, load_error)) {
+      update_error(load_error);
+      return false;
+    }
+  }
+  if (module == nullptr) {
+    update_error(load_error.empty() ? "embedded networking DLL not loaded" : load_error);
     return false;
   }
-  return true;
+  auto login = reinterpret_cast<NetworkLoginFn>(GetProcAddress(module, "Network_Login"));
+  if (login == nullptr) {
+    update_error("Network_Login not found");
+    return false;
+  }
+  const int result = login();
+  if (result != 0) {
+    update_error("embedded sign-in request failed");
+    return false;
+  }
+  return refresh_status(*this);
+}
+
+bool NetworkBridge::refresh_runtime() {
+  std::scoped_lock lock(mutex_);
+  static HMODULE module = nullptr;
+  static bool tried_load = false;
+  static std::string load_error;
+  if (!tried_load) {
+    tried_load = true;
+    if (!load_runtime_library(module, load_error)) {
+      update_error(load_error);
+      return false;
+    }
+  }
+  if (module == nullptr) {
+    update_error(load_error.empty() ? "embedded networking DLL not loaded" : load_error);
+    return false;
+  }
+  auto refresh = reinterpret_cast<NetworkRefreshFn>(GetProcAddress(module, "Network_Refresh"));
+  if (refresh == nullptr) {
+    update_error("Network_Refresh not found");
+    return false;
+  }
+  const int result = refresh();
+  if (result != 0) {
+    update_error("embedded refresh failed");
+    return false;
+  }
+  return refresh_status(*this);
+}
+
+int NetworkBridge::connect_peer(const std::string& peer_name, std::uint16_t port) {
+  std::scoped_lock lock(mutex_);
+  static HMODULE module = nullptr;
+  static bool tried_load = false;
+  static std::string load_error;
+  if (!tried_load) {
+    tried_load = true;
+    if (!load_runtime_library(module, load_error)) {
+      update_error(load_error);
+      return -1;
+    }
+  }
+  if (module == nullptr) {
+    update_error(load_error.empty() ? "embedded networking DLL not loaded" : load_error);
+    return -1;
+  }
+  auto connect = reinterpret_cast<NetworkConnectPeerFn>(GetProcAddress(module, "Network_ConnectPeer"));
+  if (connect == nullptr) {
+    update_error("Network_ConnectPeer not found");
+    return -1;
+  }
+  const int result = connect(peer_name.c_str(), port);
+  if (result < 0) {
+    update_error("peer connect request failed");
+    return result;
+  }
+  return result;
 }
 
 bool NetworkBridge::complete_sign_in(const std::string&) {
@@ -234,15 +342,29 @@ std::vector<TailnetPeer> NetworkBridge::peers() const {
 std::string NetworkBridge::status_json() const {
   std::scoped_lock lock(mutex_);
   std::ostringstream out;
-  out << "{\"started\":" << (started_ ? "true" : "false")
-      << ",\"signedIn\":" << (identity_.signed_in ? "true" : "false")
-      << ",\"accountEmail\":\"" << identity_.account_email
-      << "\",\"tailnetName\":\"" << identity_.tailnet_name
-      << "\",\"deviceName\":\"" << identity_.device_name
-      << "\",\"deviceId\":\"" << identity_.device_id
-      << "\",\"tailscaleIp\":\"" << identity_.tailscale_ip
-      << "\",\"peerCount\":" << peers_.size()
-      << ",\"lastErrorMessage\":\"" << last_error_message_ << "\"}";
+  out << "{\"mode\":\"" << (identity_.signed_in ? "signed_in" : "signed_out") << "\""
+      << ",\"loginUrl\":\"" << escape_json_string(login_url_) << "\""
+      << ",\"identity\":{\"accountEmail\":\"" << escape_json_string(identity_.account_email) << "\""
+      << ",\"tailnetName\":\"" << escape_json_string(identity_.tailnet_name) << "\""
+      << ",\"deviceName\":\"" << escape_json_string(identity_.device_name) << "\""
+      << ",\"deviceId\":\"" << escape_json_string(identity_.device_id) << "\""
+      << ",\"tailscaleIp\":\"" << escape_json_string(identity_.tailscale_ip) << "\""
+      << ",\"signedIn\":" << (identity_.signed_in ? "true" : "false") << "}"
+      << ",\"peers\":[";
+  for (std::size_t index = 0; index < peers_.size(); ++index) {
+    if (index > 0) {
+      out << ",";
+    }
+    const auto& peer = peers_[index];
+    out << "{\"nodeId\":\"" << escape_json_string(peer.node_id) << "\""
+        << ",\"name\":\"" << escape_json_string(peer.name) << "\""
+        << ",\"address\":\"" << escape_json_string(peer.address) << "\""
+        << ",\"platform\":\"" << escape_json_string(peer.platform) << "\""
+        << ",\"online\":" << (peer.online ? "true" : "false")
+        << ",\"latencyMs\":" << peer.latency_ms
+        << ",\"quality\":" << peer.quality << "}";
+  }
+  out << "],\"lastError\":\"" << escape_json_string(last_error_message_) << "\"}";
   return out.str();
 }
 
@@ -255,6 +377,7 @@ void NetworkBridge::set_runtime_state(const NativeStatus& runtime_state) {
   std::scoped_lock lock(mutex_);
   identity_ = runtime_state.identity;
   peers_ = runtime_state.peers;
+  login_url_ = runtime_state.login_url;
   started_ = runtime_state.state != "offline";
   last_error_message_ = runtime_state.last_error.empty() ? runtime_state.state : runtime_state.last_error;
 }

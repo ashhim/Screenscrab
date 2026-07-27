@@ -5,6 +5,7 @@
 #include <string>
 
 #include "logging.h"
+#include "network_bridge.h"
 #include "session_manager.h"
 
 namespace {
@@ -63,6 +64,7 @@ std::string status_json(const screenscrab::native::SessionSnapshot& snapshot) {
 
 struct screenscrab::native::EngineHandle {
   SessionManager manager;
+  NetworkBridge network;
 };
 
 const char* screencrab_engine_version() {
@@ -146,4 +148,38 @@ const char* screencrab_engine_last_error_message(void* engine) {
   thread_local std::string message;
   message = handle->manager.snapshot().last_error_message;
   return message.c_str();
+}
+
+int screencrab_engine_begin_sign_in(void* engine) {
+  if (engine == nullptr) {
+    return -1;
+  }
+  auto* handle = static_cast<screenscrab::native::EngineHandle*>(engine);
+  return handle->network.begin_sign_in() ? 0 : -1;
+}
+
+int screencrab_engine_refresh_runtime(void* engine) {
+  if (engine == nullptr) {
+    return -1;
+  }
+  auto* handle = static_cast<screenscrab::native::EngineHandle*>(engine);
+  return handle->network.refresh_runtime() ? 0 : -1;
+}
+
+int screencrab_engine_connect_peer(void* engine, const char* peer_name, std::uint16_t port) {
+  if (engine == nullptr || peer_name == nullptr) {
+    return -1;
+  }
+  auto* handle = static_cast<screenscrab::native::EngineHandle*>(engine);
+  return handle->network.connect_peer(peer_name, port);
+}
+
+const char* screencrab_engine_runtime_status_json(void* engine) {
+  if (engine == nullptr) {
+    return "{\"mode\":\"signed_out\",\"loginUrl\":\"\",\"identity\":{},\"peers\":[],\"lastError\":\"engine handle is null\"}";
+  }
+  auto* handle = static_cast<screenscrab::native::EngineHandle*>(engine);
+  thread_local std::string runtime_status;
+  runtime_status = handle->network.status_json();
+  return runtime_status.c_str();
 }

@@ -37,17 +37,18 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
   late final RemoteSessionClient _client;
   final TextEditingController _clipboardController = TextEditingController();
   final List<DeviceEndpoint> _hosts = <DeviceEndpoint>[];
+  final List<NetworkPeer> _runtimePeers = <NetworkPeer>[];
 
   Timer? _timer;
   ConnectionStateValue _state = ConnectionStateValue.disconnected;
   String _platformVersion = 'unknown';
   String _clipboardText = '';
   String _lastAction = 'Idle';
-  TailnetRuntimeStatus _tailnetStatus = const TailnetRuntimeStatus(
+  NetworkRuntimeStatus _tailnetStatus = const NetworkRuntimeStatus(
     mode: 'signed_out',
     loginUrl: '',
-    identity: TailnetIdentity(deviceName: 'Screenscrab Android'),
-    peers: <TailnetPeer>[],
+    identity: NetworkIdentity(deviceName: 'Screenscrab Android'),
+    peers: <NetworkPeer>[],
     lastError: '',
   );
   String _lastStatus = 'Disconnected';
@@ -114,7 +115,7 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
       _clipboardText = clipboard;
       _clipboardController.text = clipboard;
       _framesReceived = _client.framesReceived;
-      _tailnetStatus = TailnetRuntimeStatus(
+      _tailnetStatus = NetworkRuntimeStatus(
         mode:
             _state == ConnectionStateValue.connected
                 ? 'signed_in'
@@ -122,19 +123,21 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
                     ? 'signing_in'
                     : 'signed_out'),
         loginUrl: '',
-        identity: TailnetIdentity(
+        identity: NetworkIdentity(
           deviceName: 'Screenscrab Android',
           signedIn: _state == ConnectionStateValue.connected,
         ),
-        peers: _hosts
-            .map(
-              (DeviceEndpoint device) => TailnetPeer(
-                name: device.name,
-                address: device.address,
-                online: true,
-              ),
-            )
-            .toList(growable: false),
+        peers: _runtimePeers.isEmpty
+            ? _hosts
+                .map(
+                  (DeviceEndpoint device) => NetworkPeer(
+                    name: device.name,
+                    address: device.address,
+                    online: true,
+                  ),
+                )
+                .toList(growable: false)
+            : _runtimePeers,
         lastError: _lastStatus,
       );
     });
@@ -243,13 +246,16 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
     if (key == LogicalKeyboardKey.pageUp) return 0x21;
     if (key == LogicalKeyboardKey.pageDown) return 0x22;
     if (key == LogicalKeyboardKey.shiftLeft ||
-        key == LogicalKeyboardKey.shiftRight)
+        key == LogicalKeyboardKey.shiftRight) {
       return 0x10;
+    }
     if (key == LogicalKeyboardKey.controlLeft ||
-        key == LogicalKeyboardKey.controlRight)
+        key == LogicalKeyboardKey.controlRight) {
       return 0x11;
-    if (key == LogicalKeyboardKey.altLeft || key == LogicalKeyboardKey.altRight)
+    }
+    if (key == LogicalKeyboardKey.altLeft || key == LogicalKeyboardKey.altRight) {
       return 0x12;
+    }
     return 0;
   }
 

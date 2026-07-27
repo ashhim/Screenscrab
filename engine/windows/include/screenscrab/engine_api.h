@@ -30,3 +30,7 @@ SCRSCRAB_API int screencrab_engine_stop(void* engine);
 SCRSCRAB_API int screencrab_engine_last_error(void* engine);
 SCRSCRAB_API const char* screencrab_engine_status_json(void* engine);
 SCRSCRAB_API const char* screencrab_engine_last_error_message(void* engine);
+SCRSCRAB_API int screencrab_engine_begin_sign_in(void* engine);
+SCRSCRAB_API int screencrab_engine_refresh_runtime(void* engine);
+SCRSCRAB_API int screencrab_engine_connect_peer(void* engine, const char* peer_name, std::uint16_t port);
+SCRSCRAB_API const char* screencrab_engine_runtime_status_json(void* engine);

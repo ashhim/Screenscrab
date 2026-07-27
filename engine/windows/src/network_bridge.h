@@ -46,6 +46,8 @@ class NetworkBridge {
   bool start();
   void stop();
   bool begin_sign_in();
+  bool refresh_runtime();
+  int connect_peer(const std::string& peer_name, std::uint16_t port);
   bool complete_sign_in(const std::string& code);
   TailnetIdentity identity() const;
   std::vector<TailnetPeer> peers() const;
@@ -60,6 +62,7 @@ class NetworkBridge {
   mutable std::mutex mutex_{};
   TailnetIdentity identity_{};
   std::vector<TailnetPeer> peers_{};
+  std::string login_url_{};
   std::string last_error_message_{"embedded networking not yet linked"};
   bool started_{false};
 };

@@ -40,9 +40,9 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
     text: 'Screenscrab Host',
   );
   final List<DeviceEndpoint> _devices = <DeviceEndpoint>[];
+  final List<NetworkPeer> _runtimePeers = <NetworkPeer>[];
 
   Timer? _pollTimer;
-  AppMode _mode = AppMode.host;
   ConnectionStateValue _connectionState = ConnectionStateValue.disconnected;
   EngineRuntimeStatus _status = const EngineRuntimeStatus(
     apiVersion: 1,
@@ -68,19 +68,16 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
   int _apiVersion = 0;
   int _protocolVersion = 0;
   EngineCapabilities? _capabilities;
-  TailnetRuntimeStatus _tailnetStatus = const TailnetRuntimeStatus(
+  NetworkRuntimeStatus _tailnetStatus = const NetworkRuntimeStatus(
     mode: 'signed_out',
     loginUrl: '',
-    identity: TailnetIdentity(deviceName: 'Screenscrab Host'),
-    peers: <TailnetPeer>[],
+    identity: NetworkIdentity(deviceName: 'Screenscrab Host'),
+    peers: <NetworkPeer>[],
     lastError: '',
   );
   String _diagnosticMessage = 'Starting diagnostics...';
   bool _tailscaleCommandPresent = false;
   bool _busy = false;
-  int _monitorIndex = 0;
-  bool _audioEnabled = true;
-  bool _clipboardEnabled = true;
 
   @override
   void initState() {
@@ -109,6 +106,7 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
 
   Future<void> _refreshDiagnostics() async {
     final EngineRuntimeStatus? status = _engine.currentStatus();
+    final NetworkRuntimeStatus? runtimeStatus = _engine.runtimeStatus();
     final String version = _engine.version ?? 'not-loaded';
     final int apiVersion = _engine.apiVersion;
     final int protocolVersion = _engine.protocolVersion;
@@ -144,52 +142,55 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
       _capabilities = capabilities;
       _diagnosticMessage = message;
       _tailscaleCommandPresent = tailscalePresent;
-      _tailnetStatus = TailnetRuntimeStatus(
-        mode:
-            _status.sessionActive || _status.tailscaleReachable
-                ? 'signed_in'
-                : (_status.lastErrorMessage.isEmpty
-                    ? 'signed_out'
-                    : 'signing_in'),
-        loginUrl:
-            _status.endpoint.isEmpty ? '' : 'tailscale://${_status.endpoint}',
-        identity: TailnetIdentity(
-          deviceName:
-              _deviceNameController.text.trim().isEmpty
-                  ? 'Screenscrab Host'
-                  : _deviceNameController.text.trim(),
-          deviceId: _engineVersion,
-          signedIn: _status.sessionActive || _status.tailscaleReachable,
-        ),
-        peers: _devices
-            .map(
-              (DeviceEndpoint device) => TailnetPeer(
-                name: device.name,
-                address: device.address,
-                online: true,
-              ),
-            )
-            .toList(growable: false),
-        lastError:
-            _status.lastErrorMessage.isEmpty
-                ? _diagnosticMessage
-                : _status.lastErrorMessage,
-      );
+      if (runtimeStatus != null) {
+        _runtimePeers
+          ..clear()
+          ..addAll(runtimeStatus.peers);
+        _tailnetStatus = runtimeStatus;
+      } else {
+        _tailnetStatus = NetworkRuntimeStatus(
+          mode:
+              _status.sessionActive || _status.tailscaleReachable
+                  ? 'signed_in'
+                  : (_status.lastErrorMessage.isEmpty
+                      ? 'signed_out'
+                      : 'signing_in'),
+          loginUrl: _status.endpoint.isEmpty ? '' : 'tailscale://${_status.endpoint}',
+          identity: NetworkIdentity(
+            deviceName:
+                _deviceNameController.text.trim().isEmpty
+                    ? 'Screenscrab Host'
+                    : _deviceNameController.text.trim(),
+            deviceId: _engineVersion,
+            signedIn: _status.sessionActive || _status.tailscaleReachable,
+          ),
+          peers: _runtimePeers.isEmpty
+              ? _devices
+                  .map(
+                    (DeviceEndpoint device) => NetworkPeer(
+                      name: device.name,
+                      address: device.address,
+                      online: true,
+                    ),
+                  )
+                  .toList(growable: false)
+              : _runtimePeers,
+          lastError:
+              _status.lastErrorMessage.isEmpty
+                  ? _diagnosticMessage
+                  : _status.lastErrorMessage,
+        );
+      }
     });
   }
 
   Future<void> _startSession() async {
     setState(() => _busy = true);
     try {
-      if (_mode == AppMode.host) {
-        await _engine.startHost(
-          _deviceNameController.text.trim().isEmpty
-              ? 'Screenscrab Host'
-              : _deviceNameController.text.trim(),
-        );
-      } else {
-        await _engine.startClient('screenscrab-peer', 4545);
+      if (!_tailnetStatus.identity.signedIn) {
+        await _engine.beginSignIn();
       }
+      await _engine.refreshRuntime();
       await _refreshDiagnostics();
     } finally {
       if (mounted) {
@@ -202,6 +203,19 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
     setState(() => _busy = true);
     try {
       await _engine.stop();
+      await _refreshDiagnostics();
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  Future<void> _connectToPeer(NetworkPeer peer) async {
+    setState(() => _busy = true);
+    try {
+      await _engine.connectPeer(peer.name.isEmpty ? peer.address : peer.name, 4545);
+      await _engine.refreshRuntime();
       await _refreshDiagnostics();
     } finally {
       if (mounted) {
@@ -278,20 +292,9 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
           children: <Widget>[
             Text('Session Dashboard', style: theme.textTheme.headlineSmall),
             const SizedBox(height: 12),
-            SegmentedButton<AppMode>(
-              segments: const <ButtonSegment<AppMode>>[
-                ButtonSegment<AppMode>(
-                  value: AppMode.host,
-                  label: Text('Host'),
-                ),
-                ButtonSegment<AppMode>(
-                  value: AppMode.client,
-                  label: Text('Client'),
-                ),
-              ],
-              selected: <AppMode>{_mode},
-              onSelectionChanged:
-                  (Set<AppMode> value) => setState(() => _mode = value.first),
+            Text(
+              'Embedded Tailscale sign-in will appear here after the runtime is ready.',
+              style: theme.textTheme.bodyMedium,
             ),
             const SizedBox(height: 16),
             TextField(
@@ -299,47 +302,20 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
               decoration: const InputDecoration(labelText: 'Device name'),
             ),
             const SizedBox(height: 12),
-            DropdownButtonFormField<int>(
-              value: _monitorIndex,
-              decoration: const InputDecoration(labelText: 'Monitor'),
-              items: const <DropdownMenuItem<int>>[
-                DropdownMenuItem<int>(value: 0, child: Text('Monitor 1')),
-                DropdownMenuItem<int>(value: 1, child: Text('Monitor 2')),
-                DropdownMenuItem<int>(value: 2, child: Text('Monitor 3')),
-              ],
-              onChanged: (int? value) {
-                if (value != null) {
-                  setState(() => _monitorIndex = value);
-                }
-              },
-            ),
-            const SizedBox(height: 12),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              value: _audioEnabled,
-              onChanged: (bool value) => setState(() => _audioEnabled = value),
-              title: const Text('Audio'),
-            ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              value: _clipboardEnabled,
-              onChanged:
-                  (bool value) => setState(() => _clipboardEnabled = value),
-              title: const Text('Clipboard sync'),
-            ),
-            const SizedBox(height: 16),
             Row(
               children: <Widget>[
                 FilledButton.icon(
                   onPressed: _busy ? null : _startSession,
-                  icon: const Icon(Icons.play_arrow),
-                  label: const Text('Start'),
+                  icon: const Icon(Icons.login),
+                  label: Text(
+                    _tailnetStatus.identity.signedIn ? 'Refresh' : 'Sign in',
+                  ),
                 ),
                 const SizedBox(width: 12),
                 OutlinedButton.icon(
                   onPressed: _busy ? null : _stopSession,
-                  icon: const Icon(Icons.stop),
-                  label: const Text('Stop'),
+                  icon: const Icon(Icons.logout),
+                  label: const Text('Logout'),
                 ),
               ],
             ),
@@ -378,8 +354,8 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
                       const SizedBox(width: 12),
                       OutlinedButton.icon(
                         onPressed: _busy ? null : _stopSession,
-                        icon: const Icon(Icons.stop_circle_outlined),
-                        label: const Text('Stop'),
+                        icon: const Icon(Icons.logout),
+                        label: const Text('Logout'),
                       ),
                     ],
                   ),
@@ -389,7 +365,30 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
                   ],
                   const SizedBox(height: 8),
                   Text('Identity: ${_tailnetStatus.identity.deviceName}'),
+                  Text('Account: ${_tailnetStatus.identity.accountEmail.isEmpty ? 'pending' : _tailnetStatus.identity.accountEmail}'),
+                  Text('Tailnet: ${_tailnetStatus.identity.tailnetName.isEmpty ? 'not joined' : _tailnetStatus.identity.tailnetName}'),
                   Text('Peers: ${_tailnetStatus.peers.length}'),
+                  if (_tailnetStatus.peers.isNotEmpty) ...<Widget>[
+                    const SizedBox(height: 8),
+                    ..._tailnetStatus.peers.map(
+                      (NetworkPeer peer) => Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: Text(
+                                '${peer.name.isEmpty ? peer.address : peer.name} ${peer.online ? '●' : '○'}',
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: _busy ? null : () => _connectToPeer(peer),
+                              child: const Text('Connect'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

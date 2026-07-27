@@ -22,6 +22,11 @@ typedef _VersionNative = ffi.Pointer<ffi.Char> Function();
 typedef _MessageNative = ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Void>);
 typedef _VersionValueNative = ffi.Uint32 Function();
 typedef _CapabilitiesNative = ffi.Pointer<ffi.Char> Function();
+typedef _BeginSignInNative = ffi.Int32 Function(ffi.Pointer<ffi.Void>);
+typedef _RefreshNative = ffi.Int32 Function(ffi.Pointer<ffi.Void>);
+typedef _ConnectPeerNative = ffi.Int32 Function(ffi.Pointer<ffi.Void>, ffi.Pointer<ffi.Char>, ffi.Uint16);
+typedef _ConnectPeerDart = int Function(ffi.Pointer<ffi.Void>, ffi.Pointer<ffi.Char>, int);
+typedef _RuntimeStatusNative = ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Void>);
 
 @immutable
 class EngineLibrary {
@@ -100,6 +105,32 @@ class EngineLibrary {
             )(handle)
             .cast<Utf8>()
             .toDartString();
+    final String Function(ffi.Pointer<ffi.Void>) runtimeStatusJson =
+        (ffi.Pointer<ffi.Void> handle) => library
+            .lookupFunction<_RuntimeStatusNative, ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Void>)>(
+              'screencrab_engine_runtime_status_json',
+            )(handle)
+            .cast<Utf8>()
+            .toDartString();
+    final int Function(ffi.Pointer<ffi.Void>) beginSignIn =
+        library.lookupFunction<_BeginSignInNative, int Function(ffi.Pointer<ffi.Void>)>(
+          'screencrab_engine_begin_sign_in',
+        );
+    final int Function(ffi.Pointer<ffi.Void>) refresh =
+        library.lookupFunction<_RefreshNative, int Function(ffi.Pointer<ffi.Void>)>(
+          'screencrab_engine_refresh_runtime',
+        );
+    final int Function(ffi.Pointer<ffi.Void>, String, int) connectPeer =
+        (ffi.Pointer<ffi.Void> handle, String peerName, int port) {
+      final ffi.Pointer<ffi.Char> nativeName = _toNativeCharPointer(peerName);
+      try {
+        return library.lookupFunction<_ConnectPeerNative, _ConnectPeerDart>(
+          'screencrab_engine_connect_peer',
+        )(handle, nativeName, port);
+      } finally {
+        malloc.free(nativeName.cast<ffi.Uint8>());
+      }
+    };
     return EngineBindings(
       create: create,
       destroy: destroy,
@@ -113,6 +144,10 @@ class EngineLibrary {
       capabilitiesJson: capabilitiesJson,
       statusJson: statusJson,
       lastErrorMessage: lastErrorMessage,
+      beginSignIn: beginSignIn,
+      refresh: refresh,
+      connectPeer: connectPeer,
+      runtimeStatusJson: runtimeStatusJson,
     );
   }
 
@@ -142,6 +177,10 @@ class EngineBindings {
     required this.capabilitiesJson,
     required this.statusJson,
     required this.lastErrorMessage,
+    required this.beginSignIn,
+    required this.refresh,
+    required this.connectPeer,
+    required this.runtimeStatusJson,
   });
 
   final ffi.Pointer<ffi.Void> Function() create;
@@ -156,4 +195,8 @@ class EngineBindings {
   final String Function() capabilitiesJson;
   final String Function(ffi.Pointer<ffi.Void>) statusJson;
   final String Function(ffi.Pointer<ffi.Void>) lastErrorMessage;
+  final int Function(ffi.Pointer<ffi.Void>) beginSignIn;
+  final int Function(ffi.Pointer<ffi.Void>) refresh;
+  final int Function(ffi.Pointer<ffi.Void>, String, int) connectPeer;
+  final String Function(ffi.Pointer<ffi.Void>) runtimeStatusJson;
 }
