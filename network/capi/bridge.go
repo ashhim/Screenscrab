@@ -2,15 +2,16 @@ package main
 
 /*
 #include <stdint.h>
+#include <stdlib.h>
 */
 import "C"
 
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"strings"
 	"sync"
@@ -20,24 +21,24 @@ import (
 	"screenscrab.network/internal/api"
 
 	"tailscale.com/client/local"
-	"tailscale.com/ipn"
+	"tailscale.com/ipn/ipnstate"
 	"tailscale.com/tsnet"
 )
 
-type connection struct {
+type connHandle struct {
 	conn net.Conn
 }
 
 type runtimeState struct {
-	mu          sync.Mutex
-	started      bool
-	server       *tsnet.Server
-	localClient  *local.Client
-	status       api.Status
-	lastError    string
-	identityJSON string
-	conns        map[uint64]*connection
-	nextConnID   uint64
+	mu        sync.Mutex
+	started   bool
+	server    *tsnet.Server
+	local     *local.Client
+	authURL   string
+	lastError string
+	nextID    uint64
+	conns     map[uint64]*connHandle
+	status    api.Status
 }
 
 var state = &runtimeState{
@@ -49,55 +50,98 @@ var state = &runtimeState{
 		},
 		Peers:         []api.Peer{},
 		LastError:     "network runtime not started",
-		Reconnectable:  true,
+		Reconnectable: true,
 	},
-	conns: map[uint64]*connection{},
+	conns: map[uint64]*connHandle{},
 }
 
-func cString(s string) *C.char { return C.CString(s) }
+func cstr(s string) *C.char { return C.CString(s) }
 
-func copyCString(s string) *C.char { return cString(strings.TrimRight(s, "\x00")) }
+func freeCBuffer(_ unsafe.Pointer) {}
 
-func (r *runtimeState) refreshStatusLocked(ctx context.Context) {
-	if r.server == nil || r.localClient == nil {
+func firstIP(ips []netip.Addr) string {
+	if len(ips) == 0 {
+		return ""
+	}
+	return ips[0].String()
+}
+
+func toStatusJSON(st *ipnstate.Status, authURL, lastError string) api.Status {
+	status := api.Status{
+		State:           api.SignedIn,
+		LastError:       lastError,
+		LoginURL:        authURL,
+		Reconnectable:   true,
+		Identity:        api.Identity{},
+		Peers:           []api.Peer{},
+		PeerCount:       0,
+	}
+	if st == nil {
+		status.State = api.Offline
+		return status
+	}
+	if st.BackendState == "NeedsLogin" || st.BackendState == "NeedsMachineAuth" {
+		status.State = api.SigningIn
+	} else if st.BackendState == "Starting" {
+		status.State = api.Retrying
+	} else if st.BackendState == "Stopped" || st.BackendState == "NoState" {
+		status.State = api.Offline
+	}
+	if st.Self != nil {
+		status.Identity = api.Identity{
+			AccountEmail: "",
+			TailnetName:  "",
+			DeviceName:   st.Self.DNSName,
+			DeviceID:     fmt.Sprint(st.Self.NodeID),
+			TailscaleIP:  firstIP(st.Self.TailscaleIPs),
+			SignedIn:     st.BackendState == "Running",
+		}
+	}
+	if st.CurrentTailnet != nil {
+		status.Identity.TailnetName = st.CurrentTailnet.Name
+	}
+	if len(st.User) > 0 && st.Self != nil {
+		if u, ok := st.User[st.Self.UserID]; ok {
+			status.Identity.AccountEmail = u.LoginName
+		}
+	}
+	peers := make([]api.Peer, 0, len(st.Peer))
+	for _, peer := range st.Peer {
+		latency := uint32(0)
+		if !peer.LastHandshake.IsZero() {
+			latency = uint32(time.Since(peer.LastHandshake).Milliseconds())
+			if latency > 0xFFFFFFFF {
+				latency = 0xFFFFFFFF
+			}
+		}
+		peers = append(peers, api.Peer{
+			NodeID:    fmt.Sprint(peer.NodeID),
+			Name:      peer.DNSName,
+			Address:   firstIP(peer.TailscaleIPs),
+			Platform:  peer.OS,
+			Online:    peer.Online,
+			LatencyMS: latency,
+			Quality:   uint32(peer.RxBytes + peer.TxBytes),
+		})
+	}
+	status.Peers = peers
+	status.PeerCount = len(peers)
+	return status
+}
+
+func (r *runtimeState) refreshLocked(ctx context.Context) {
+	if r.local == nil {
+		r.status.State = api.Offline
 		return
 	}
-	st, err := r.localClient.Status(ctx)
-	if err != nil || st == nil {
-		r.lastError = fmt.Sprintf("status failed: %v", err)
+	st, err := r.local.Status(ctx)
+	if err != nil {
+		r.lastError = err.Error()
 		r.status.State = api.Error
 		r.status.LastError = r.lastError
 		return
 	}
-
-	r.status.State = api.SignedIn
-	r.status.Identity = api.Identity{
-		SignedIn:     true,
-		DeviceName:   st.Self.DNSName,
-		DeviceID:     fmt.Sprint(st.Self.ID),
-		TailscaleIP:  st.Self.TailscaleIPs[0].String(),
-		AccountEmail: st.User[st.Self.UserID].LoginName,
-		TailnetName:  st.CurrentTailnet.Name,
-	}
-	if st.Self.Online {
-		r.status.State = api.Connected
-	}
-	peers := make([]api.Peer, 0, len(st.Peer))
-	for _, peer := range st.Peer {
-		peers = append(peers, api.Peer{
-			NodeID:    fmt.Sprint(peer.ID),
-			Name:      peer.DNSName,
-			Address:   peer.TailscaleIPs[0].String(),
-			Platform:  peer.OS,
-			Online:    peer.Online,
-			LatencyMS: uint32(peer.LastSeen.Within(time.Minute).Milliseconds()),
-			Quality:   uint32(peer.PingMS),
-		})
-	}
-	r.status.Peers = peers
-	r.status.PeerCount = len(peers)
-	r.status.LastError = r.lastError
-	r.status.Reconnectable = true
+	r.status = toStatusJSON(st, r.authURL, r.lastError)
 }
 
 func (r *runtimeState) startLocked() error {
@@ -106,30 +150,59 @@ func (r *runtimeState) startLocked() error {
 	}
 	srv := &tsnet.Server{
 		Hostname: "screenscrab",
+		Dir:      filepathJoinUserConfig("Screenscrab"),
+		UserLogf: func(format string, args ...any) {
+			msg := fmt.Sprintf(format, args...)
+			if strings.Contains(msg, "auth") || strings.Contains(msg, "login") {
+				r.authURL = msg
+			}
+		},
 	}
 	if key := os.Getenv("SCREENSCRAB_TS_AUTHKEY"); key != "" {
 		srv.AuthKey = key
 	}
+	if err := srv.Start(); err != nil {
+		return err
+	}
 	lc, err := srv.LocalClient()
 	if err != nil {
+		_ = srv.Close()
 		return err
 	}
 	r.server = srv
-	r.localClient = lc
+	r.local = lc
 	r.started = true
 	r.status.State = api.SigningIn
 	r.status.LastError = ""
-	r.status.LoginURL = ""
 	return nil
 }
 
+func filepathJoinUserConfig(parts ...string) string {
+	base, err := os.UserConfigDir()
+	if err != nil {
+		return "Screenscrab"
+	}
+	path := base
+	for _, p := range parts {
+		path += string(os.PathSeparator) + p
+	}
+	return path
+}
+
 func (r *runtimeState) stopLocked() {
+	for id, c := range r.conns {
+		if c != nil && c.conn != nil {
+			_ = c.conn.Close()
+		}
+		delete(r.conns, id)
+	}
 	if r.server != nil {
 		_ = r.server.Close()
 	}
 	r.server = nil
-	r.localClient = nil
+	r.local = nil
 	r.started = false
+	r.authURL = ""
 	r.status = api.Status{
 		State: api.Offline,
 		Identity: api.Identity{
@@ -138,22 +211,214 @@ func (r *runtimeState) stopLocked() {
 		},
 		Peers:         []api.Peer{},
 		LastError:     "network stopped",
-		Reconnectable:  true,
+		Reconnectable: true,
 	}
-	for _, conn := range r.conns {
-		if conn.conn != nil {
-			_ = conn.conn.Close()
-		}
-	}
-	r.conns = map[uint64]*connection{}
-	r.nextConnID = 0
 }
 
+func wrapCall(fn func() C.int) C.int {
+	return fn()
+}
+
+//export Network_Start
+func Network_Start() C.int {
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	if err := state.startLocked(); err != nil {
+		state.lastError = err.Error()
+		state.status.State = api.Error
+		state.status.LastError = state.lastError
+		return -1
+	}
+	return 0
+}
+
+//export Network_Stop
+func Network_Stop() C.int {
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	state.stopLocked()
+	return 0
+}
+
+//export Network_Login
+func Network_Login() C.int {
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	if err := state.startLocked(); err != nil {
+		state.lastError = err.Error()
+		state.status.State = api.Error
+		state.status.LastError = state.lastError
+		return -1
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	state.refreshLocked(ctx)
+	return 0
+}
+
+//export Network_Logout
+func Network_Logout() C.int {
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	if state.local != nil {
+		_ = state.local.Logout(context.Background())
+	}
+	state.stopLocked()
+	return 0
+}
+
+//export Network_GetStatus
+func Network_GetStatus() *C.char {
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	payload, _ := json.Marshal(state.status)
+	return cstr(string(payload))
+}
+
+//export Network_GetIdentity
+func Network_GetIdentity() *C.char {
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	payload, _ := json.Marshal(state.status.Identity)
+	return cstr(string(payload))
+}
+
+//export Network_GetPeers
+func Network_GetPeers() *C.char {
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	payload, _ := json.Marshal(state.status.Peers)
+	return cstr(string(payload))
+}
+
+//export Network_ConnectPeer
+func Network_ConnectPeer(peerName *C.char, port C.uint16_t) C.int {
+	if peerName == nil {
+		return -1
+	}
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	if state.local == nil {
+		return -1
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	conn, err := state.local.DialTCP(ctx, C.GoString(peerName), uint16(port))
+	if err != nil {
+		state.lastError = err.Error()
+		state.status.LastError = state.lastError
+		state.status.State = api.Error
+		return -1
+	}
+	state.nextID++
+	state.conns[state.nextID] = &connHandle{conn: conn}
+	state.status.State = api.Connected
+	return C.int(state.nextID)
+}
+
+//export Network_Disconnect
+func Network_Disconnect(connID C.uint64_t) C.int {
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	handle := state.conns[uint64(connID)]
+	if handle == nil || handle.conn == nil {
+		return -1
+	}
+	_ = handle.conn.Close()
+	delete(state.conns, uint64(connID))
+	state.status.State = api.SignedIn
+	return 0
+}
+
+//export Network_Send
+func Network_Send(connID C.uint64_t, data unsafe.Pointer, size C.uint32_t) C.int {
+	if data == nil || size == 0 {
+		return -1
+	}
+	state.mu.Lock()
+	handle := state.conns[uint64(connID)]
+	state.mu.Unlock()
+	if handle == nil || handle.conn == nil {
+		return -1
+	}
+	buf := unsafe.Slice((*byte)(data), int(size))
+	n, err := handle.conn.Write(buf)
+	if err != nil {
+		return -1
+	}
+	return C.int(n)
+}
+
+//export Network_Receive
+func Network_Receive(connID C.uint64_t, data unsafe.Pointer, size C.uint32_t) C.int {
+	if data == nil || size == 0 {
+		return -1
+	}
+	state.mu.Lock()
+	handle := state.conns[uint64(connID)]
+	state.mu.Unlock()
+	if handle == nil || handle.conn == nil {
+		return -1
+	}
+	buf := unsafe.Slice((*byte)(data), int(size))
+	n, err := handle.conn.Read(buf)
+	if err != nil {
+		return -1
+	}
+	return C.int(n)
+}
+
+//export Network_FreeBuffer
+func Network_FreeBuffer(ptr unsafe.Pointer) {
+	C.free(ptr)
+}
+
+//export Network_GetLastError
+func Network_GetLastError() *C.char {
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	if state.lastError == "" {
+		return cstr("")
+	}
+	return cstr(state.lastError)
+}
+
+//export Network_Refresh
+func Network_Refresh() C.int {
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	state.refreshLocked(ctx)
+	return 0
+}
+
+//export Network_Reconnect
+func Network_Reconnect() C.int {
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	if state.local != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		state.refreshLocked(ctx)
+		return 0
+	}
+	return -1
+}
+
+//export Network_GetAuthURL
+func Network_GetAuthURL() *C.char {
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	return cstr(state.authURL)
+}
+
+// Legacy aliases kept for the existing C++ bridge.
 //export screencrab_network_api_version
 func screencrab_network_api_version() C.uint32_t { return 1 }
 
 //export screencrab_network_version
-func screencrab_network_version() *C.char { return cString("0.1.0") }
+func screencrab_network_version() *C.char { return cstr("0.2.0") }
 
 //export screencrab_network_create
 func screencrab_network_create() unsafe.Pointer { return unsafe.Pointer(state) }
@@ -162,143 +427,44 @@ func screencrab_network_create() unsafe.Pointer { return unsafe.Pointer(state) }
 func screencrab_network_destroy(_ unsafe.Pointer) {}
 
 //export screencrab_network_start
-func screencrab_network_start(_ unsafe.Pointer) C.int {
-	state.mu.Lock()
-	defer state.mu.Unlock()
-	if err := state.startLocked(); err != nil {
-		state.lastError = err.Error()
-		state.status.State = api.Error
-		state.status.LastError = state.lastError
-		return -1
-	}
-	return 0
-}
+func screencrab_network_start(_ unsafe.Pointer) C.int { return Network_Start() }
 
 //export screencrab_network_stop
-func screencrab_network_stop(_ unsafe.Pointer) C.int {
-	state.mu.Lock()
-	defer state.mu.Unlock()
-	state.stopLocked()
-	return 0
-}
+func screencrab_network_stop(_ unsafe.Pointer) C.int { return Network_Stop() }
 
 //export screencrab_network_begin_sign_in
-func screencrab_network_begin_sign_in(_ unsafe.Pointer) C.int {
-	state.mu.Lock()
-	defer state.mu.Unlock()
-	if err := state.startLocked(); err != nil {
-		state.lastError = err.Error()
-		state.status.State = api.Error
-		state.status.LastError = state.lastError
-		return -1
-	}
-	// tsnet prints an auth URL to the log sink on first login; the actual
-	// interactive completion is handled by the embedded Tailscale flow.
-	state.status.State = api.SigningIn
-	return 0
-}
+func screencrab_network_begin_sign_in(_ unsafe.Pointer) C.int { return Network_Login() }
 
 //export screencrab_network_complete_sign_in
-func screencrab_network_complete_sign_in(_ unsafe.Pointer, _ *C.char) C.int {
-	state.mu.Lock()
-	defer state.mu.Unlock()
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	state.refreshStatusLocked(ctx)
-	return 0
-}
+func screencrab_network_complete_sign_in(ctx unsafe.Pointer, token *C.char) C.int { return Network_Refresh() }
 
 //export screencrab_network_status_json
-func screencrab_network_status_json(_ unsafe.Pointer) *C.char {
-	state.mu.Lock()
-	defer state.mu.Unlock()
-	payload, _ := json.Marshal(state.status)
-	return cString(string(payload))
-}
+func screencrab_network_status_json(_ unsafe.Pointer) *C.char { return Network_GetStatus() }
 
 //export screencrab_network_last_error_message
-func screencrab_network_last_error_message(_ unsafe.Pointer) *C.char {
-	state.mu.Lock()
-	defer state.mu.Unlock()
-	return cString(state.lastError)
-}
+func screencrab_network_last_error_message(_ unsafe.Pointer) *C.char { return Network_GetLastError() }
 
 //export screencrab_network_connect_peer
 func screencrab_network_connect_peer(_ unsafe.Pointer, peerName *C.char, port C.uint16_t) C.int {
-	state.mu.Lock()
-	defer state.mu.Unlock()
-	if state.localClient == nil {
-		return -1
-	}
-	name := C.GoString(peerName)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	conn, err := state.localClient.DialTCP(ctx, name, uint16(port))
-	if err != nil {
-		state.lastError = err.Error()
-		state.status.LastError = state.lastError
-		state.status.State = api.Error
-		return -1
-	}
-	state.nextConnID++
-	state.conns[state.nextConnID] = &connection{conn: conn}
-	state.status.State = api.Connected
-	return C.int(state.nextConnID)
+	return Network_ConnectPeer(peerName, port)
 }
 
 //export screencrab_network_send
 func screencrab_network_send(_ unsafe.Pointer, connID C.uint64_t, data unsafe.Pointer, size C.uint32_t) C.int {
-	state.mu.Lock()
-	c := state.conns[uint64(connID)]
-	state.mu.Unlock()
-	if c == nil || c.conn == nil || data == nil || size == 0 {
-		return -1
-	}
-	buf := unsafe.Slice((*byte)(data), int(size))
-	n, err := c.conn.Write(buf)
-	if err != nil {
-		return -1
-	}
-	return C.int(n)
+	return Network_Send(connID, data, size)
 }
 
 //export screencrab_network_receive
 func screencrab_network_receive(_ unsafe.Pointer, connID C.uint64_t, data unsafe.Pointer, size C.uint32_t) C.int {
-	state.mu.Lock()
-	c := state.conns[uint64(connID)]
-	state.mu.Unlock()
-	if c == nil || c.conn == nil || data == nil || size == 0 {
-		return -1
-	}
-	buf := unsafe.Slice((*byte)(data), int(size))
-	n, err := c.conn.Read(buf)
-	if err != nil && !errors.Is(err, net.ErrClosed) {
-		return -1
-	}
-	return C.int(n)
+	return Network_Receive(connID, data, size)
 }
 
 //export screencrab_network_disconnect_peer
 func screencrab_network_disconnect_peer(_ unsafe.Pointer, connID C.uint64_t) C.int {
-	state.mu.Lock()
-	defer state.mu.Unlock()
-	c := state.conns[uint64(connID)]
-	if c == nil || c.conn == nil {
-		return -1
-	}
-	_ = c.conn.Close()
-	delete(state.conns, uint64(connID))
-	return 0
+	return Network_Disconnect(connID)
 }
 
 //export screencrab_network_refresh
-func screencrab_network_refresh(_ unsafe.Pointer) C.int {
-	state.mu.Lock()
-	defer state.mu.Unlock()
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	state.refreshStatusLocked(ctx)
-	return 0
-}
+func screencrab_network_refresh(_ unsafe.Pointer) C.int { return Network_Refresh() }
 
 func main() {}

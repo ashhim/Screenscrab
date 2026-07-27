@@ -26,6 +26,15 @@ struct TailnetIdentity {
   bool signed_in{false};
 };
 
+struct NativeStatus {
+  std::string state;
+  std::string last_error;
+  std::string login_url;
+  std::string json;
+  TailnetIdentity identity;
+  std::vector<TailnetPeer> peers;
+};
+
 class NetworkBridge {
  public:
   NetworkBridge();
@@ -44,12 +53,18 @@ class NetworkBridge {
   std::string last_error_message() const;
 
  private:
+  friend bool refresh_status(NetworkBridge& bridge);
+  void set_runtime_state(const NativeStatus& runtime_state);
+  void update_error(const std::string& error);
+
   mutable std::mutex mutex_{};
   TailnetIdentity identity_{};
   std::vector<TailnetPeer> peers_{};
   std::string last_error_message_{"embedded networking not yet linked"};
   bool started_{false};
 };
+
+bool refresh_status(NetworkBridge& bridge);
 
 }  // namespace screenscrab::native
 

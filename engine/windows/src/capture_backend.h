@@ -22,6 +22,9 @@ struct CaptureFrame {
 
 class CaptureBackend {
  public:
+  CaptureBackend();
+  ~CaptureBackend();
+
   bool initialize(std::uint32_t monitor_index);
   bool capture(CaptureFrame& frame);
   void shutdown();

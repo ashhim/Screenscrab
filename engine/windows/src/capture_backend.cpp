@@ -69,6 +69,10 @@ struct CaptureBackend::Impl {
   bool ready{false};
 };
 
+CaptureBackend::CaptureBackend() = default;
+
+CaptureBackend::~CaptureBackend() = default;
+
 bool CaptureBackend::initialize(std::uint32_t monitor_index) {
   monitor_index_ = monitor_index;
   impl_ = std::make_unique<Impl>();
