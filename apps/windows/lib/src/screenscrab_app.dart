@@ -37,8 +37,6 @@ class WindowsHomePage extends StatefulWidget {
 class _WindowsHomePageState extends State<WindowsHomePage> {
   final ScreenscrabEngineBridge _engine = ScreenscrabEngineBridge();
   final TextEditingController _deviceNameController = TextEditingController(text: 'Screenscrab Host');
-  final TextEditingController _addressController = TextEditingController(text: '100.64.10.21');
-  final TextEditingController _portController = TextEditingController(text: '4545');
   final List<DeviceEndpoint> _devices = <DeviceEndpoint>[
     DeviceEndpoint(
       deviceId: 'tailnet-host-01',
@@ -97,8 +95,6 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
     _pollTimer?.cancel();
     _engine.dispose();
     _deviceNameController.dispose();
-    _addressController.dispose();
-    _portController.dispose();
     super.dispose();
   }
 
@@ -149,8 +145,7 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
           _deviceNameController.text.trim().isEmpty ? 'Screenscrab Host' : _deviceNameController.text.trim(),
         );
       } else {
-        final int port = int.tryParse(_portController.text.trim()) ?? 4545;
-        await _engine.startClient(_addressController.text.trim(), port);
+        await _engine.startClient('screenscrab-peer', 4545);
       }
       await _refreshDiagnostics();
     } finally {
@@ -247,23 +242,10 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
               onSelectionChanged: (Set<AppMode> value) => setState(() => _mode = value.first),
             ),
             const SizedBox(height: 16),
-            if (_mode == AppMode.host) ...<Widget>[
-              TextField(
-                controller: _deviceNameController,
-                decoration: const InputDecoration(labelText: 'Host name'),
-              ),
-            ] else ...<Widget>[
-              TextField(
-                controller: _addressController,
-                decoration: const InputDecoration(labelText: 'Host address'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _portController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Port'),
-              ),
-            ],
+            TextField(
+              controller: _deviceNameController,
+              decoration: const InputDecoration(labelText: 'Device name'),
+            ),
             const SizedBox(height: 12),
             DropdownButtonFormField<int>(
               value: _monitorIndex,
@@ -309,9 +291,7 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
               ],
             ),
             const SizedBox(height: 16),
-            const Text(
-              'Screenscrab uses the local Tailscale tailnet for peer discovery and transport. No Screenscrab cloud account is required.',
-            ),
+            const Text('Screenscrab uses embedded tailnet networking for device discovery and transport.'),
           ],
         ),
       ),

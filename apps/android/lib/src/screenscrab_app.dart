@@ -35,8 +35,6 @@ class AndroidHomePage extends StatefulWidget {
 class _AndroidHomePageState extends State<AndroidHomePage> {
   final AndroidScreenscrabBridge _bridge = AndroidScreenscrabBridge();
   late final RemoteSessionClient _client;
-  final TextEditingController _hostController = TextEditingController(text: '100.64.10.21');
-  final TextEditingController _portController = TextEditingController(text: '4545');
   final TextEditingController _clipboardController = TextEditingController();
   final List<DeviceEndpoint> _hosts = <DeviceEndpoint>[
     DeviceEndpoint(
@@ -94,8 +92,6 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
   void dispose() {
     _timer?.cancel();
     _client.disconnect();
-    _hostController.dispose();
-    _portController.dispose();
     _clipboardController.dispose();
     _keyboardFocusNode.dispose();
     super.dispose();
@@ -123,13 +119,12 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
   }
 
   Future<void> _connect() async {
-    final int port = int.tryParse(_portController.text.trim()) ?? 4545;
-    await _client.connect(host: _hostController.text.trim(), port: port);
+    await _client.connect(host: 'screenscrab-host.local', port: 4545);
     if (!mounted) {
       return;
     }
     setState(() {
-      _lastAction = 'Connecting to ${_hostController.text.trim()}:$port';
+      _lastAction = 'Connecting to discovered host';
       _lastStatus = 'Connection requested';
     });
   }
@@ -250,7 +245,7 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(20),
-                child: Stack(
+              child: Stack(
                   fit: StackFit.expand,
                   children: <Widget>[
                     AndroidView(
@@ -267,7 +262,7 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
                         ),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        child: Text(
+                          child: Text(
                             _state == ConnectionStateValue.connected ? 'Live remote display' : 'Connect to stream the desktop',
                           ),
                         ),
@@ -333,17 +328,6 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text('Remote Session', style: theme.textTheme.headlineSmall),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _hostController,
-                    decoration: const InputDecoration(labelText: 'Host address'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _portController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Port'),
-                  ),
                   const SizedBox(height: 12),
                   Row(
                     children: <Widget>[
@@ -417,7 +401,7 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
                       contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.computer),
                       title: Text(device.name),
-                      subtitle: Text(device.address),
+                      subtitle: Text('${device.address} | ${device.mode.name}'),
                     ),
                 ],
               ),
