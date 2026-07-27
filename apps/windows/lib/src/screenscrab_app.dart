@@ -155,7 +155,8 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
                   : (_status.lastErrorMessage.isEmpty
                       ? 'signed_out'
                       : 'signing_in'),
-          loginUrl: _status.endpoint.isEmpty ? '' : 'tailscale://${_status.endpoint}',
+          loginUrl:
+              _status.endpoint.isEmpty ? '' : 'tailscale://${_status.endpoint}',
           identity: NetworkIdentity(
             deviceName:
                 _deviceNameController.text.trim().isEmpty
@@ -164,17 +165,18 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
             deviceId: _engineVersion,
             signedIn: _status.sessionActive || _status.tailscaleReachable,
           ),
-          peers: _runtimePeers.isEmpty
-              ? _devices
-                  .map(
-                    (DeviceEndpoint device) => NetworkPeer(
-                      name: device.name,
-                      address: device.address,
-                      online: true,
-                    ),
-                  )
-                  .toList(growable: false)
-              : _runtimePeers,
+          peers:
+              _runtimePeers.isEmpty
+                  ? _devices
+                      .map(
+                        (DeviceEndpoint device) => NetworkPeer(
+                          name: device.name,
+                          address: device.address,
+                          online: true,
+                        ),
+                      )
+                      .toList(growable: false)
+                  : _runtimePeers,
           lastError:
               _status.lastErrorMessage.isEmpty
                   ? _diagnosticMessage
@@ -214,7 +216,10 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
   Future<void> _connectToPeer(NetworkPeer peer) async {
     setState(() => _busy = true);
     try {
-      await _engine.connectPeer(peer.name.isEmpty ? peer.address : peer.name, 4545);
+      await _engine.connectPeer(
+        peer.name.isEmpty ? peer.address : peer.name,
+        4545,
+      );
       await _engine.refreshRuntime();
       await _refreshDiagnostics();
     } finally {
@@ -365,8 +370,12 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
                   ],
                   const SizedBox(height: 8),
                   Text('Identity: ${_tailnetStatus.identity.deviceName}'),
-                  Text('Account: ${_tailnetStatus.identity.accountEmail.isEmpty ? 'pending' : _tailnetStatus.identity.accountEmail}'),
-                  Text('Tailnet: ${_tailnetStatus.identity.tailnetName.isEmpty ? 'not joined' : _tailnetStatus.identity.tailnetName}'),
+                  Text(
+                    'Account: ${_tailnetStatus.identity.accountEmail.isEmpty ? 'pending' : _tailnetStatus.identity.accountEmail}',
+                  ),
+                  Text(
+                    'Tailnet: ${_tailnetStatus.identity.tailnetName.isEmpty ? 'not joined' : _tailnetStatus.identity.tailnetName}',
+                  ),
                   Text('Peers: ${_tailnetStatus.peers.length}'),
                   if (_tailnetStatus.peers.isNotEmpty) ...<Widget>[
                     const SizedBox(height: 8),
@@ -381,7 +390,8 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
                               ),
                             ),
                             TextButton(
-                              onPressed: _busy ? null : () => _connectToPeer(peer),
+                              onPressed:
+                                  _busy ? null : () => _connectToPeer(peer),
                               child: const Text('Connect'),
                             ),
                           ],

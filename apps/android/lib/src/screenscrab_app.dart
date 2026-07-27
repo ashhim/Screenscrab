@@ -127,17 +127,18 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
           deviceName: 'Screenscrab Android',
           signedIn: _state == ConnectionStateValue.connected,
         ),
-        peers: _runtimePeers.isEmpty
-            ? _hosts
-                .map(
-                  (DeviceEndpoint device) => NetworkPeer(
-                    name: device.name,
-                    address: device.address,
-                    online: true,
-                  ),
-                )
-                .toList(growable: false)
-            : _runtimePeers,
+        peers:
+            _runtimePeers.isEmpty
+                ? _hosts
+                    .map(
+                      (DeviceEndpoint device) => NetworkPeer(
+                        name: device.name,
+                        address: device.address,
+                        online: true,
+                      ),
+                    )
+                    .toList(growable: false)
+                : _runtimePeers,
         lastError: _lastStatus,
       );
     });
@@ -253,7 +254,8 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
         key == LogicalKeyboardKey.controlRight) {
       return 0x11;
     }
-    if (key == LogicalKeyboardKey.altLeft || key == LogicalKeyboardKey.altRight) {
+    if (key == LogicalKeyboardKey.altLeft ||
+        key == LogicalKeyboardKey.altRight) {
       return 0x12;
     }
     return 0;

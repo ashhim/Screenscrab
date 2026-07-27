@@ -18,7 +18,9 @@ class ScreenscrabEngineBridge {
       return null;
     }
     final String statusJson = _bindings!.statusJson(_handle!);
-    return EngineRuntimeStatus.fromJson(jsonDecode(statusJson) as Map<String, dynamic>);
+    return EngineRuntimeStatus.fromJson(
+      jsonDecode(statusJson) as Map<String, dynamic>,
+    );
   }
 
   Future<void> startHost(String deviceName) async {
@@ -44,7 +46,8 @@ class ScreenscrabEngineBridge {
 
   String? get version => _bindings == null ? null : _bindings!.version();
   int get apiVersion => _bindings == null ? 0 : _bindings!.apiVersion();
-  int get protocolVersion => _bindings == null ? 0 : _bindings!.protocolVersion();
+  int get protocolVersion =>
+      _bindings == null ? 0 : _bindings!.protocolVersion();
   EngineCapabilities? get capabilities {
     if (_bindings == null) {
       return null;
@@ -53,14 +56,20 @@ class ScreenscrabEngineBridge {
       jsonDecode(_bindings!.capabilitiesJson()) as Map<String, dynamic>,
     );
   }
-  String? get lastErrorMessage => _bindings == null || _handle == null ? null : _bindings!.lastErrorMessage(_handle!);
+
+  String? get lastErrorMessage =>
+      _bindings == null || _handle == null
+          ? null
+          : _bindings!.lastErrorMessage(_handle!);
 
   NetworkRuntimeStatus? runtimeStatus() {
     if (_bindings == null || _handle == null) {
       return null;
     }
     final String statusJson = _bindings!.runtimeStatusJson(_handle!);
-    return NetworkRuntimeStatus.fromJson(jsonDecode(statusJson) as Map<String, dynamic>);
+    return NetworkRuntimeStatus.fromJson(
+      jsonDecode(statusJson) as Map<String, dynamic>,
+    );
   }
 
   Future<void> beginSignIn() async {

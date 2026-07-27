@@ -7,14 +7,18 @@ import 'package:meta/meta.dart';
 
 typedef _CreateNative = ffi.Pointer<ffi.Void> Function();
 typedef _DestroyNative = ffi.Void Function(ffi.Pointer<ffi.Void>);
-typedef _StartHostNative = ffi.Int32 Function(ffi.Pointer<ffi.Void>, ffi.Pointer<ffi.Char>);
-typedef _StartHostDart = int Function(ffi.Pointer<ffi.Void>, ffi.Pointer<ffi.Char>);
-typedef _StartClientNative = ffi.Int32 Function(
-  ffi.Pointer<ffi.Void>,
-  ffi.Pointer<ffi.Char>,
-  ffi.Uint16,
-);
-typedef _StartClientDart = int Function(ffi.Pointer<ffi.Void>, ffi.Pointer<ffi.Char>, int);
+typedef _StartHostNative =
+    ffi.Int32 Function(ffi.Pointer<ffi.Void>, ffi.Pointer<ffi.Char>);
+typedef _StartHostDart =
+    int Function(ffi.Pointer<ffi.Void>, ffi.Pointer<ffi.Char>);
+typedef _StartClientNative =
+    ffi.Int32 Function(
+      ffi.Pointer<ffi.Void>,
+      ffi.Pointer<ffi.Char>,
+      ffi.Uint16,
+    );
+typedef _StartClientDart =
+    int Function(ffi.Pointer<ffi.Void>, ffi.Pointer<ffi.Char>, int);
 typedef _StopNative = ffi.Int32 Function(ffi.Pointer<ffi.Void>);
 typedef _LastErrorNative = ffi.Int32 Function(ffi.Pointer<ffi.Void>);
 typedef _StatusNative = ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Void>);
@@ -24,9 +28,16 @@ typedef _VersionValueNative = ffi.Uint32 Function();
 typedef _CapabilitiesNative = ffi.Pointer<ffi.Char> Function();
 typedef _BeginSignInNative = ffi.Int32 Function(ffi.Pointer<ffi.Void>);
 typedef _RefreshNative = ffi.Int32 Function(ffi.Pointer<ffi.Void>);
-typedef _ConnectPeerNative = ffi.Int32 Function(ffi.Pointer<ffi.Void>, ffi.Pointer<ffi.Char>, ffi.Uint16);
-typedef _ConnectPeerDart = int Function(ffi.Pointer<ffi.Void>, ffi.Pointer<ffi.Char>, int);
-typedef _RuntimeStatusNative = ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Void>);
+typedef _ConnectPeerNative =
+    ffi.Int32 Function(
+      ffi.Pointer<ffi.Void>,
+      ffi.Pointer<ffi.Char>,
+      ffi.Uint16,
+    );
+typedef _ConnectPeerDart =
+    int Function(ffi.Pointer<ffi.Void>, ffi.Pointer<ffi.Char>, int);
+typedef _RuntimeStatusNative =
+    ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Void>);
 
 @immutable
 class EngineLibrary {
@@ -55,11 +66,18 @@ class EngineLibrary {
   }
 
   EngineBindings bind() {
-    final ffi.Pointer<ffi.Void> Function() create =
-        library.lookupFunction<_CreateNative, ffi.Pointer<ffi.Void> Function()>('screencrab_engine_create');
-    final void Function(ffi.Pointer<ffi.Void>) destroy =
-        library.lookupFunction<_DestroyNative, void Function(ffi.Pointer<ffi.Void>)>('screencrab_engine_destroy');
-    final int Function(ffi.Pointer<ffi.Void>, String) startHost = (ffi.Pointer<ffi.Void> handle, String deviceName) {
+    final ffi.Pointer<ffi.Void> Function() create = library
+        .lookupFunction<_CreateNative, ffi.Pointer<ffi.Void> Function()>(
+          'screencrab_engine_create',
+        );
+    final void Function(ffi.Pointer<ffi.Void>) destroy = library
+        .lookupFunction<_DestroyNative, void Function(ffi.Pointer<ffi.Void>)>(
+          'screencrab_engine_destroy',
+        );
+    final int Function(ffi.Pointer<ffi.Void>, String) startHost = (
+      ffi.Pointer<ffi.Void> handle,
+      String deviceName,
+    ) {
       final ffi.Pointer<ffi.Char> nativeName = _toNativeCharPointer(deviceName);
       try {
         return library.lookupFunction<_StartHostNative, _StartHostDart>(
@@ -69,8 +87,11 @@ class EngineLibrary {
         malloc.free(nativeName.cast<ffi.Uint8>());
       }
     };
-    final int Function(ffi.Pointer<ffi.Void>, String, int) startClient =
-        (ffi.Pointer<ffi.Void> handle, String address, int port) {
+    final int Function(ffi.Pointer<ffi.Void>, String, int) startClient = (
+      ffi.Pointer<ffi.Void> handle,
+      String address,
+      int port,
+    ) {
       final ffi.Pointer<ffi.Char> nativeAddress = _toNativeCharPointer(address);
       try {
         return library.lookupFunction<_StartClientNative, _StartClientDart>(
@@ -80,48 +101,81 @@ class EngineLibrary {
         malloc.free(nativeAddress.cast<ffi.Uint8>());
       }
     };
-    final int Function(ffi.Pointer<ffi.Void>) stop =
-        library.lookupFunction<_StopNative, int Function(ffi.Pointer<ffi.Void>)>('screencrab_engine_stop');
-    final int Function(ffi.Pointer<ffi.Void>) lastError =
-        library.lookupFunction<_LastErrorNative, int Function(ffi.Pointer<ffi.Void>)>('screencrab_engine_last_error');
+    final int Function(ffi.Pointer<ffi.Void>) stop = library
+        .lookupFunction<_StopNative, int Function(ffi.Pointer<ffi.Void>)>(
+          'screencrab_engine_stop',
+        );
+    final int Function(ffi.Pointer<ffi.Void>) lastError = library
+        .lookupFunction<_LastErrorNative, int Function(ffi.Pointer<ffi.Void>)>(
+          'screencrab_engine_last_error',
+        );
     final String Function() version =
-        () => library.lookupFunction<_VersionNative, ffi.Pointer<ffi.Char> Function()>('screencrab_engine_version')().cast<Utf8>().toDartString();
-    final int Function() apiVersion = library.lookupFunction<_VersionValueNative, int Function()>('screencrab_engine_api_version');
-    final int Function() protocolVersion =
-        library.lookupFunction<_VersionValueNative, int Function()>('screencrab_engine_protocol_version');
+        () =>
+            library
+                .lookupFunction<
+                  _VersionNative,
+                  ffi.Pointer<ffi.Char> Function()
+                >('screencrab_engine_version')()
+                .cast<Utf8>()
+                .toDartString();
+    final int Function() apiVersion = library
+        .lookupFunction<_VersionValueNative, int Function()>(
+          'screencrab_engine_api_version',
+        );
+    final int Function() protocolVersion = library
+        .lookupFunction<_VersionValueNative, int Function()>(
+          'screencrab_engine_protocol_version',
+        );
     final String Function() capabilitiesJson =
-        () => library.lookupFunction<_CapabilitiesNative, ffi.Pointer<ffi.Char> Function()>('screencrab_engine_capabilities_json')().cast<Utf8>().toDartString();
-    final String Function(ffi.Pointer<ffi.Void>) statusJson = (ffi.Pointer<ffi.Void> handle) {
-      final ffi.Pointer<ffi.Char> ptr =
-          library.lookupFunction<_StatusNative, ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Void>)>(
-        'screencrab_engine_status_json',
-      )(handle);
+        () =>
+            library
+                .lookupFunction<
+                  _CapabilitiesNative,
+                  ffi.Pointer<ffi.Char> Function()
+                >('screencrab_engine_capabilities_json')()
+                .cast<Utf8>()
+                .toDartString();
+    final String Function(ffi.Pointer<ffi.Void>) statusJson = (
+      ffi.Pointer<ffi.Void> handle,
+    ) {
+      final ffi.Pointer<ffi.Char> ptr = library.lookupFunction<
+        _StatusNative,
+        ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Void>)
+      >('screencrab_engine_status_json')(handle);
       return ptr.cast<Utf8>().toDartString();
     };
     final String Function(ffi.Pointer<ffi.Void>) lastErrorMessage =
-        (ffi.Pointer<ffi.Void> handle) => library
-            .lookupFunction<_MessageNative, ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Void>)>(
-              'screencrab_engine_last_error_message',
-            )(handle)
-            .cast<Utf8>()
-            .toDartString();
+        (ffi.Pointer<ffi.Void> handle) =>
+            library
+                .lookupFunction<
+                  _MessageNative,
+                  ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Void>)
+                >('screencrab_engine_last_error_message')(handle)
+                .cast<Utf8>()
+                .toDartString();
     final String Function(ffi.Pointer<ffi.Void>) runtimeStatusJson =
-        (ffi.Pointer<ffi.Void> handle) => library
-            .lookupFunction<_RuntimeStatusNative, ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Void>)>(
-              'screencrab_engine_runtime_status_json',
-            )(handle)
-            .cast<Utf8>()
-            .toDartString();
-    final int Function(ffi.Pointer<ffi.Void>) beginSignIn =
-        library.lookupFunction<_BeginSignInNative, int Function(ffi.Pointer<ffi.Void>)>(
-          'screencrab_engine_begin_sign_in',
-        );
-    final int Function(ffi.Pointer<ffi.Void>) refresh =
-        library.lookupFunction<_RefreshNative, int Function(ffi.Pointer<ffi.Void>)>(
+        (ffi.Pointer<ffi.Void> handle) =>
+            library
+                .lookupFunction<
+                  _RuntimeStatusNative,
+                  ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Void>)
+                >('screencrab_engine_runtime_status_json')(handle)
+                .cast<Utf8>()
+                .toDartString();
+    final int Function(ffi.Pointer<ffi.Void>) beginSignIn = library
+        .lookupFunction<
+          _BeginSignInNative,
+          int Function(ffi.Pointer<ffi.Void>)
+        >('screencrab_engine_begin_sign_in');
+    final int Function(ffi.Pointer<ffi.Void>) refresh = library
+        .lookupFunction<_RefreshNative, int Function(ffi.Pointer<ffi.Void>)>(
           'screencrab_engine_refresh_runtime',
         );
-    final int Function(ffi.Pointer<ffi.Void>, String, int) connectPeer =
-        (ffi.Pointer<ffi.Void> handle, String peerName, int port) {
+    final int Function(ffi.Pointer<ffi.Void>, String, int) connectPeer = (
+      ffi.Pointer<ffi.Void> handle,
+      String peerName,
+      int port,
+    ) {
       final ffi.Pointer<ffi.Char> nativeName = _toNativeCharPointer(peerName);
       try {
         return library.lookupFunction<_ConnectPeerNative, _ConnectPeerDart>(
