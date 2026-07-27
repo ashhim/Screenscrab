@@ -119,15 +119,45 @@ class EngineCapabilities {
 }
 
 @immutable
-class NetworkPeer {
-  const NetworkPeer({
-    required this.nodeId,
-    required this.name,
-    required this.address,
-    required this.platform,
-    required this.online,
-    required this.latencyMs,
-    required this.quality,
+class TailnetIdentity {
+  const TailnetIdentity({
+    this.accountEmail = '',
+    this.tailnetName = '',
+    this.deviceName = '',
+    this.deviceId = '',
+    this.tailscaleIp = '',
+    this.signedIn = false,
+  });
+
+  final String accountEmail;
+  final String tailnetName;
+  final String deviceName;
+  final String deviceId;
+  final String tailscaleIp;
+  final bool signedIn;
+
+  factory TailnetIdentity.fromJson(Map<String, dynamic> json) {
+    return TailnetIdentity(
+      accountEmail: json['accountEmail'] as String? ?? '',
+      tailnetName: json['tailnetName'] as String? ?? '',
+      deviceName: json['deviceName'] as String? ?? '',
+      deviceId: json['deviceId'] as String? ?? '',
+      tailscaleIp: json['tailscaleIp'] as String? ?? '',
+      signedIn: json['signedIn'] as bool? ?? false,
+    );
+  }
+}
+
+@immutable
+class TailnetPeer {
+  const TailnetPeer({
+    this.nodeId = '',
+    this.name = '',
+    this.address = '',
+    this.platform = '',
+    this.online = false,
+    this.latencyMs = 0,
+    this.quality = 0,
   });
 
   final String nodeId;
@@ -138,12 +168,12 @@ class NetworkPeer {
   final int latencyMs;
   final int quality;
 
-  factory NetworkPeer.fromJson(Map<String, dynamic> json) {
-    return NetworkPeer(
-      nodeId: (json['nodeId'] as String?) ?? '',
-      name: (json['name'] as String?) ?? '',
-      address: (json['address'] as String?) ?? '',
-      platform: (json['platform'] as String?) ?? '',
+  factory TailnetPeer.fromJson(Map<String, dynamic> json) {
+    return TailnetPeer(
+      nodeId: json['nodeId'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      address: json['address'] as String? ?? '',
+      platform: json['platform'] as String? ?? '',
       online: json['online'] as bool? ?? false,
       latencyMs: (json['latencyMs'] as num?)?.toInt() ?? 0,
       quality: (json['quality'] as num?)?.toInt() ?? 0,
@@ -152,50 +182,31 @@ class NetworkPeer {
 }
 
 @immutable
-class NetworkRuntimeStatus {
-  const NetworkRuntimeStatus({
-    required this.started,
-    required this.signedIn,
-    required this.accountEmail,
-    required this.tailnetName,
-    required this.deviceName,
-    required this.deviceId,
-    required this.tailscaleIp,
-    required this.peerCount,
+class TailnetRuntimeStatus {
+  const TailnetRuntimeStatus({
+    required this.mode,
     required this.loginUrl,
-    required this.lastErrorMessage,
+    required this.identity,
     required this.peers,
+    required this.lastError,
   });
 
-  final bool started;
-  final bool signedIn;
-  final String accountEmail;
-  final String tailnetName;
-  final String deviceName;
-  final String deviceId;
-  final String tailscaleIp;
-  final int peerCount;
+  final String mode;
   final String loginUrl;
-  final String lastErrorMessage;
-  final List<NetworkPeer> peers;
+  final TailnetIdentity identity;
+  final List<TailnetPeer> peers;
+  final String lastError;
 
-  factory NetworkRuntimeStatus.fromJson(Map<String, dynamic> json) {
-    final List<dynamic> peerList = json['peers'] as List<dynamic>? ?? <dynamic>[];
-    return NetworkRuntimeStatus(
-      started: json['started'] as bool? ?? false,
-      signedIn: json['signedIn'] as bool? ?? false,
-      accountEmail: (json['accountEmail'] as String?) ?? '',
-      tailnetName: (json['tailnetName'] as String?) ?? '',
-      deviceName: (json['deviceName'] as String?) ?? '',
-      deviceId: (json['deviceId'] as String?) ?? '',
-      tailscaleIp: (json['tailscaleIp'] as String?) ?? '',
-      peerCount: (json['peerCount'] as num?)?.toInt() ?? peerList.length,
-      loginUrl: (json['loginUrl'] as String?) ?? '',
-      lastErrorMessage: (json['lastErrorMessage'] as String?) ?? '',
-      peers: peerList
-          .whereType<Map<String, dynamic>>()
-          .map(NetworkPeer.fromJson)
-          .toList(),
+  factory TailnetRuntimeStatus.fromJson(Map<String, dynamic> json) {
+    final List<dynamic>? rawPeers = json['peers'] as List<dynamic>?;
+    return TailnetRuntimeStatus(
+      mode: json['mode'] as String? ?? 'signed_out',
+      loginUrl: json['loginUrl'] as String? ?? '',
+      identity: TailnetIdentity.fromJson(json['identity'] as Map<String, dynamic>? ?? <String, dynamic>{}),
+      peers: rawPeers == null
+          ? const <TailnetPeer>[]
+          : rawPeers.map((dynamic entry) => TailnetPeer.fromJson(entry as Map<String, dynamic>)).toList(growable: false),
+      lastError: json['lastError'] as String? ?? '',
     );
   }
 }
@@ -215,6 +226,18 @@ class DeviceEndpoint {
   final String address;
   final AppMode mode;
   final DateTime lastSeenUtc;
+
+  factory DeviceEndpoint.fromTailnetPeer(TailnetPeer peer, {String? deviceId, AppMode mode = AppMode.host}) {
+    final String resolvedName = peer.name.isEmpty ? (peer.address.isEmpty ? 'Peer' : peer.address) : peer.name;
+    final String resolvedDeviceId = deviceId ?? (peer.nodeId.isEmpty ? 'peer-${peer.address}' : peer.nodeId);
+    return DeviceEndpoint(
+      deviceId: resolvedDeviceId,
+      name: resolvedName,
+      address: peer.address.isEmpty ? 'unknown' : peer.address,
+      mode: mode,
+      lastSeenUtc: DateTime.now().toUtc(),
+    );
+  }
 }
 
 @immutable

@@ -36,21 +36,20 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
   final AndroidScreenscrabBridge _bridge = AndroidScreenscrabBridge();
   late final RemoteSessionClient _client;
   final TextEditingController _clipboardController = TextEditingController();
-  final List<DeviceEndpoint> _hosts = <DeviceEndpoint>[
-    DeviceEndpoint(
-      deviceId: 'tailnet-win-01',
-      name: 'Workstation',
-      address: '100.64.10.21',
-      mode: AppMode.host,
-      lastSeenUtc: DateTime.now().toUtc(),
-    ),
-  ];
+  final List<DeviceEndpoint> _hosts = <DeviceEndpoint>[];
 
   Timer? _timer;
   ConnectionStateValue _state = ConnectionStateValue.disconnected;
   String _platformVersion = 'unknown';
   String _clipboardText = '';
   String _lastAction = 'Idle';
+  TailnetRuntimeStatus _tailnetStatus = const TailnetRuntimeStatus(
+    mode: 'signed_out',
+    loginUrl: '',
+    identity: TailnetIdentity(deviceName: 'Screenscrab Android'),
+    peers: <TailnetPeer>[],
+    lastError: '',
+  );
   String _lastStatus = 'Disconnected';
   bool _audioEnabled = true;
   bool _clipboardSyncEnabled = true;
@@ -115,6 +114,20 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
       _clipboardText = clipboard;
       _clipboardController.text = clipboard;
       _framesReceived = _client.framesReceived;
+      _tailnetStatus = TailnetRuntimeStatus(
+        mode: _state == ConnectionStateValue.connected ? 'signed_in' : (_state == ConnectionStateValue.connecting ? 'signing_in' : 'signed_out'),
+        loginUrl: '',
+        identity: TailnetIdentity(
+          deviceName: 'Screenscrab Android',
+          signedIn: _state == ConnectionStateValue.connected,
+        ),
+        peers: _hosts.map((DeviceEndpoint device) => TailnetPeer(
+              name: device.name,
+              address: device.address,
+              online: true,
+            )).toList(growable: false),
+        lastError: _lastStatus,
+      );
     });
   }
 
@@ -327,7 +340,13 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text('Remote Session', style: theme.textTheme.headlineSmall),
+                  Text('Embedded tailnet', style: theme.textTheme.headlineSmall),
+                  const SizedBox(height: 12),
+                  Text(
+                    _tailnetStatus.identity.signedIn
+                        ? 'Signed in and ready to connect to a discovered peer.'
+                        : 'Sign in by joining the embedded tailnet and then connect to a peer from the list below.',
+                  ),
                   const SizedBox(height: 12),
                   Row(
                     children: <Widget>[
@@ -396,13 +415,20 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
                 children: <Widget>[
                   Text('Discovered hosts', style: theme.textTheme.headlineSmall),
                   const SizedBox(height: 12),
-                  for (final DeviceEndpoint device in _hosts)
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.computer),
-                      title: Text(device.name),
-                      subtitle: Text('${device.address} | ${device.mode.name}'),
-                    ),
+                  if (_hosts.isEmpty)
+                    Text('Peers will appear here after the embedded runtime discovers them.')
+                  else
+                    for (final DeviceEndpoint device in _hosts)
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.computer),
+                        title: Text(device.name),
+                        subtitle: Text('${device.address} | ${device.mode.name}'),
+                        trailing: FilledButton.tonal(
+                          onPressed: () => _client.connect(host: device.address, port: 4545),
+                          child: const Text('Open'),
+                        ),
+                      ),
                 ],
               ),
             ),

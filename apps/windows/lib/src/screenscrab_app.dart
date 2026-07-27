@@ -37,15 +37,7 @@ class WindowsHomePage extends StatefulWidget {
 class _WindowsHomePageState extends State<WindowsHomePage> {
   final ScreenscrabEngineBridge _engine = ScreenscrabEngineBridge();
   final TextEditingController _deviceNameController = TextEditingController(text: 'Screenscrab Host');
-  final List<DeviceEndpoint> _devices = <DeviceEndpoint>[
-    DeviceEndpoint(
-      deviceId: 'tailnet-host-01',
-      name: 'Workstation',
-      address: '100.64.10.21',
-      mode: AppMode.host,
-      lastSeenUtc: DateTime.now().toUtc(),
-    ),
-  ];
+  final List<DeviceEndpoint> _devices = <DeviceEndpoint>[];
 
   Timer? _pollTimer;
   AppMode _mode = AppMode.host;
@@ -74,6 +66,13 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
   int _apiVersion = 0;
   int _protocolVersion = 0;
   EngineCapabilities? _capabilities;
+  TailnetRuntimeStatus _tailnetStatus = const TailnetRuntimeStatus(
+    mode: 'signed_out',
+    loginUrl: '',
+    identity: TailnetIdentity(deviceName: 'Screenscrab Host'),
+    peers: <TailnetPeer>[],
+    lastError: '',
+  );
   String _diagnosticMessage = 'Starting diagnostics...';
   bool _tailscaleCommandPresent = false;
   bool _busy = false;
@@ -134,6 +133,21 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
       _capabilities = capabilities;
       _diagnosticMessage = message;
       _tailscaleCommandPresent = tailscalePresent;
+      _tailnetStatus = TailnetRuntimeStatus(
+        mode: _status.sessionActive || _status.tailscaleReachable ? 'signed_in' : (_status.lastErrorMessage.isEmpty ? 'signed_out' : 'signing_in'),
+        loginUrl: _status.endpoint.isEmpty ? '' : 'tailscale://${_status.endpoint}',
+        identity: TailnetIdentity(
+          deviceName: _deviceNameController.text.trim().isEmpty ? 'Screenscrab Host' : _deviceNameController.text.trim(),
+          deviceId: _engineVersion,
+          signedIn: _status.sessionActive || _status.tailscaleReachable,
+        ),
+        peers: _devices.map((DeviceEndpoint device) => TailnetPeer(
+              name: device.name,
+              address: device.address,
+              online: true,
+            )).toList(growable: false),
+        lastError: _status.lastErrorMessage.isEmpty ? _diagnosticMessage : _status.lastErrorMessage,
+      );
     });
   }
 
@@ -291,7 +305,49 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
               ],
             ),
             const SizedBox(height: 16),
-            const Text('Screenscrab uses embedded tailnet networking for device discovery and transport.'),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primaryContainer.withValues(alpha: 0.35),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text('Embedded tailnet', style: theme.textTheme.titleMedium),
+                  const SizedBox(height: 6),
+                  Text(
+                    _tailnetStatus.identity.signedIn
+                        ? 'Your host is signed in and ready to discover peers.'
+                        : 'Sign in to join the embedded tailnet and discover peers.',
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: <Widget>[
+                      FilledButton.icon(
+                        onPressed: _busy ? null : _startSession,
+                        icon: const Icon(Icons.login),
+                        label: Text(_tailnetStatus.identity.signedIn ? 'Refresh' : 'Sign in'),
+                      ),
+                      const SizedBox(width: 12),
+                      OutlinedButton.icon(
+                        onPressed: _busy ? null : _stopSession,
+                        icon: const Icon(Icons.stop_circle_outlined),
+                        label: const Text('Stop'),
+                      ),
+                    ],
+                  ),
+                  if (_tailnetStatus.loginUrl.isNotEmpty) ...<Widget>[
+                    const SizedBox(height: 8),
+                    Text('Login URL: ${_tailnetStatus.loginUrl}'),
+                  ],
+                  const SizedBox(height: 8),
+                  Text('Identity: ${_tailnetStatus.identity.deviceName}'),
+                  Text('Peers: ${_tailnetStatus.peers.length}'),
+                ],
+              ),
+            ),
           ],
         ),
       ),
