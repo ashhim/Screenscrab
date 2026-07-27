@@ -45,6 +45,8 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
   String _lastAction = 'Idle';
   NetworkRuntimeStatus _tailnetStatus = const NetworkRuntimeStatus(
     mode: 'signed_out',
+    state: 'offline',
+    connectionState: 'disconnected',
     loginUrl: '',
     identity: NetworkIdentity(deviceName: 'Screenscrab Android'),
     peers: <NetworkPeer>[],
@@ -121,6 +123,18 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
                 : (_state == ConnectionStateValue.connecting
                     ? 'signing_in'
                     : 'signed_out'),
+        state:
+            _state == ConnectionStateValue.connected
+                ? 'signed_in'
+                : (_state == ConnectionStateValue.connecting
+                    ? 'signing_in'
+                    : 'signed_out'),
+        connectionState:
+            _state == ConnectionStateValue.connected
+                ? 'connected'
+                : (_state == ConnectionStateValue.connecting
+                    ? 'connecting'
+                    : 'disconnected'),
         loginUrl: '',
         identity: NetworkIdentity(
           deviceName: 'Screenscrab Android',
@@ -496,7 +510,7 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
                           peer.name.isEmpty ? peer.address : peer.name,
                         ),
                         subtitle: Text(
-                          '${peer.address.isEmpty ? 'pending' : peer.address} | ${peer.online ? 'online' : 'offline'}',
+                          '${peer.address.isEmpty ? 'no address' : peer.address} | ${peer.online ? 'online' : 'offline'}',
                         ),
                         trailing: FilledButton.tonal(
                           onPressed: () => _connectToPeer(peer),

@@ -387,10 +387,10 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
                   Text('Runtime state: ${_tailnetStatus.state}'),
                   Text('Connection state: ${_tailnetStatus.connectionState}'),
                   Text(
-                    'Account: ${_tailnetStatus.identity.accountEmail.isEmpty ? 'pending' : _tailnetStatus.identity.accountEmail}',
+                    'Account: ${_tailnetStatus.identity.accountEmail.isEmpty ? 'not signed in' : _tailnetStatus.identity.accountEmail}',
                   ),
                   Text(
-                    'Tailnet: ${_tailnetStatus.identity.tailnetName.isEmpty ? 'not joined' : _tailnetStatus.identity.tailnetName}',
+                    'Tailnet: ${_tailnetStatus.identity.tailnetName.isEmpty ? 'unavailable' : _tailnetStatus.identity.tailnetName}',
                   ),
                   Text('Peers: ${_tailnetStatus.peers.length}'),
                   if (_tailnetStatus.peers.isNotEmpty) ...<Widget>[
