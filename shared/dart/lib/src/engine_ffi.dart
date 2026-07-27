@@ -17,6 +17,9 @@ typedef _StartClientNative = ffi.Int32 Function(
 typedef _StartClientDart = int Function(ffi.Pointer<ffi.Void>, ffi.Pointer<ffi.Char>, int);
 typedef _StopNative = ffi.Int32 Function(ffi.Pointer<ffi.Void>);
 typedef _LastErrorNative = ffi.Int32 Function(ffi.Pointer<ffi.Void>);
+typedef _StatusNative = ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Void>);
+typedef _VersionNative = ffi.Pointer<ffi.Char> Function();
+typedef _MessageNative = ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Void>);
 
 @immutable
 class EngineLibrary {
@@ -74,6 +77,22 @@ class EngineLibrary {
         library.lookupFunction<_StopNative, int Function(ffi.Pointer<ffi.Void>)>('screencrab_engine_stop');
     final int Function(ffi.Pointer<ffi.Void>) lastError =
         library.lookupFunction<_LastErrorNative, int Function(ffi.Pointer<ffi.Void>)>('screencrab_engine_last_error');
+    final String Function() version =
+        () => library.lookupFunction<_VersionNative, ffi.Pointer<ffi.Char> Function()>('screencrab_engine_version')().cast<Utf8>().toDartString();
+    final String Function(ffi.Pointer<ffi.Void>) statusJson = (ffi.Pointer<ffi.Void> handle) {
+      final ffi.Pointer<ffi.Char> ptr =
+          library.lookupFunction<_StatusNative, ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Void>)>(
+        'screencrab_engine_status_json',
+      )(handle);
+      return ptr.cast<Utf8>().toDartString();
+    };
+    final String Function(ffi.Pointer<ffi.Void>) lastErrorMessage =
+        (ffi.Pointer<ffi.Void> handle) => library
+            .lookupFunction<_MessageNative, ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Void>)>(
+              'screencrab_engine_last_error_message',
+            )(handle)
+            .cast<Utf8>()
+            .toDartString();
     return EngineBindings(
       create: create,
       destroy: destroy,
@@ -81,6 +100,9 @@ class EngineLibrary {
       startClient: startClient,
       stop: stop,
       lastError: lastError,
+      version: version,
+      statusJson: statusJson,
+      lastErrorMessage: lastErrorMessage,
     );
   }
 
@@ -104,6 +126,9 @@ class EngineBindings {
     required this.startClient,
     required this.stop,
     required this.lastError,
+    required this.version,
+    required this.statusJson,
+    required this.lastErrorMessage,
   });
 
   final ffi.Pointer<ffi.Void> Function() create;
@@ -112,4 +137,7 @@ class EngineBindings {
   final int Function(ffi.Pointer<ffi.Void>, String, int) startClient;
   final int Function(ffi.Pointer<ffi.Void>) stop;
   final int Function(ffi.Pointer<ffi.Void>) lastError;
+  final String Function() version;
+  final String Function(ffi.Pointer<ffi.Void>) statusJson;
+  final String Function(ffi.Pointer<ffi.Void>) lastErrorMessage;
 }

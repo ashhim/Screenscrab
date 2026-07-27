@@ -35,5 +35,16 @@ struct MessageHeader {
 };
 
 inline constexpr std::string_view kProtocolName = "screenscrab/1";
+inline constexpr std::uint32_t kWireMagic = 0x53435242;  // SCRB
+inline constexpr std::uint16_t kWireVersion = 1;
+
+struct WireHeader {
+  std::uint32_t magic{kWireMagic};
+  std::uint16_t version{kWireVersion};
+  std::uint16_t type{0};
+  std::uint32_t flags{0};
+  std::uint32_t payload_size{0};
+  std::uint64_t timestamp_utc_us{0};
+};
 
 }  // namespace screenscrab::protocol

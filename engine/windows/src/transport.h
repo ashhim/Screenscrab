@@ -2,13 +2,14 @@
 
 #include <cstdint>
 #include <string>
+#include <winsock2.h>
 
 namespace screenscrab::native {
 
 class Transport {
  public:
   Transport() = default;
-  ~Transport() = default;
+  ~Transport();
 
   Transport(const Transport&) = delete;
   Transport& operator=(const Transport&) = delete;
@@ -19,7 +20,7 @@ class Transport {
   int last_error() const noexcept;
 
  private:
-  bool connected_{false};
+  SOCKET socket_{INVALID_SOCKET};
   int last_error_{0};
 };
 

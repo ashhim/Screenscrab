@@ -1,0 +1,369 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:screenscrab_shared/screenscrab_shared.dart';
+
+import 'engine_bridge.dart';
+
+class ScreenscrabWindowsApp extends StatelessWidget {
+  const ScreenscrabWindowsApp({super.key, this.enableDiagnostics = true});
+
+  final bool enableDiagnostics;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'Screenscrab',
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0F766E)),
+        useMaterial3: true,
+      ),
+      home: WindowsHomePage(enableDiagnostics: enableDiagnostics),
+    );
+  }
+}
+
+class WindowsHomePage extends StatefulWidget {
+  const WindowsHomePage({super.key, this.enableDiagnostics = true});
+
+  final bool enableDiagnostics;
+
+  @override
+  State<WindowsHomePage> createState() => _WindowsHomePageState();
+}
+
+class _WindowsHomePageState extends State<WindowsHomePage> {
+  final ScreenscrabEngineBridge _engine = ScreenscrabEngineBridge();
+  final TextEditingController _deviceNameController = TextEditingController(text: 'Screenscrab Host');
+  final TextEditingController _addressController = TextEditingController(text: '100.64.10.21');
+  final TextEditingController _portController = TextEditingController(text: '4545');
+  final List<DeviceEndpoint> _devices = <DeviceEndpoint>[
+    DeviceEndpoint(
+      deviceId: 'tailnet-host-01',
+      name: 'Workstation',
+      address: '100.64.10.21',
+      mode: AppMode.host,
+      lastSeenUtc: DateTime.now().toUtc(),
+    ),
+  ];
+
+  Timer? _pollTimer;
+  AppMode _mode = AppMode.host;
+  ConnectionStateValue _connectionState = ConnectionStateValue.disconnected;
+  EngineRuntimeStatus _status = const EngineRuntimeStatus(
+    apiVersion: 1,
+    mode: 'stopped',
+    engineLoaded: false,
+    sessionActive: false,
+    tailscaleReachable: false,
+    captureReady: false,
+    audioReady: false,
+    monitorIndex: 0,
+    lastError: 0,
+    lastErrorMessage: '',
+  );
+  String _engineVersion = 'unknown';
+  String _diagnosticMessage = 'Starting diagnostics...';
+  bool _tailscaleCommandPresent = false;
+  bool _busy = false;
+  int _monitorIndex = 0;
+  bool _audioEnabled = true;
+  bool _clipboardEnabled = true;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.enableDiagnostics) {
+      _bootstrap();
+      _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) => _refreshDiagnostics());
+    }
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    _engine.dispose();
+    _deviceNameController.dispose();
+    _addressController.dispose();
+    _portController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _bootstrap() async {
+    await _engine.initialize();
+    await _refreshDiagnostics();
+  }
+
+  Future<void> _refreshDiagnostics() async {
+    final EngineRuntimeStatus? status = _engine.currentStatus();
+    final String version = _engine.version ?? 'not-loaded';
+    final String message = _engine.lastErrorMessage ?? 'ok';
+    bool tailscalePresent = false;
+
+    try {
+      final ProcessResult result = await Process.run('tailscale', <String>['status', '--json']);
+      tailscalePresent = result.exitCode == 0;
+    } on ProcessException {
+      tailscalePresent = false;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      if (status != null) {
+        _status = status;
+        _connectionState = status.sessionActive ? ConnectionStateValue.connected : ConnectionStateValue.disconnected;
+      }
+      _engineVersion = version;
+      _diagnosticMessage = message;
+      _tailscaleCommandPresent = tailscalePresent;
+    });
+  }
+
+  Future<void> _startSession() async {
+    setState(() => _busy = true);
+    try {
+      if (_mode == AppMode.host) {
+        await _engine.startHost(
+          _deviceNameController.text.trim().isEmpty ? 'Screenscrab Host' : _deviceNameController.text.trim(),
+        );
+      } else {
+        final int port = int.tryParse(_portController.text.trim()) ?? 4545;
+        await _engine.startClient(_addressController.text.trim(), port);
+      }
+      await _refreshDiagnostics();
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  Future<void> _stopSession() async {
+    setState(() => _busy = true);
+    try {
+      await _engine.stop();
+      await _refreshDiagnostics();
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Screenscrab Windows'),
+        actions: <Widget>[
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: Center(
+              child: Chip(
+                label: Text(_engineVersion),
+                avatar: const Icon(Icons.developer_board, size: 18),
+              ),
+            ),
+          ),
+        ],
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(20),
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            final bool isWide = constraints.maxWidth > 1050;
+            final Widget leftColumn = _buildControlPanel(theme);
+            final Widget rightColumn = _buildStatusPanel(theme);
+            return isWide
+                ? Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Expanded(flex: 3, child: leftColumn),
+                      const SizedBox(width: 16),
+                      Expanded(flex: 2, child: rightColumn),
+                    ],
+                  )
+                : ListView(
+                    children: <Widget>[
+                      leftColumn,
+                      const SizedBox(height: 16),
+                      rightColumn,
+                    ],
+                  );
+          },
+        ),
+      ),
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: theme.colorScheme.outlineVariant)),
+        ),
+        child: Text(
+          'Version $_engineVersion | Engine ${_status.engineLoaded ? 'loaded' : 'unloaded'} | Tailnet ${_status.tailscaleReachable || _tailscaleCommandPresent ? 'reachable' : 'offline'}',
+          textAlign: TextAlign.center,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildControlPanel(ThemeData theme) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text('Session Dashboard', style: theme.textTheme.headlineSmall),
+            const SizedBox(height: 12),
+            SegmentedButton<AppMode>(
+              segments: const <ButtonSegment<AppMode>>[
+                ButtonSegment<AppMode>(value: AppMode.host, label: Text('Host')),
+                ButtonSegment<AppMode>(value: AppMode.client, label: Text('Client')),
+              ],
+              selected: <AppMode>{_mode},
+              onSelectionChanged: (Set<AppMode> value) => setState(() => _mode = value.first),
+            ),
+            const SizedBox(height: 16),
+            if (_mode == AppMode.host) ...<Widget>[
+              TextField(
+                controller: _deviceNameController,
+                decoration: const InputDecoration(labelText: 'Host name'),
+              ),
+            ] else ...<Widget>[
+              TextField(
+                controller: _addressController,
+                decoration: const InputDecoration(labelText: 'Host address'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _portController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Port'),
+              ),
+            ],
+            const SizedBox(height: 12),
+            DropdownButtonFormField<int>(
+              value: _monitorIndex,
+              decoration: const InputDecoration(labelText: 'Monitor'),
+              items: const <DropdownMenuItem<int>>[
+                DropdownMenuItem<int>(value: 0, child: Text('Monitor 1')),
+                DropdownMenuItem<int>(value: 1, child: Text('Monitor 2')),
+                DropdownMenuItem<int>(value: 2, child: Text('Monitor 3')),
+              ],
+              onChanged: (int? value) {
+                if (value != null) {
+                  setState(() => _monitorIndex = value);
+                }
+              },
+            ),
+            const SizedBox(height: 12),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: _audioEnabled,
+              onChanged: (bool value) => setState(() => _audioEnabled = value),
+              title: const Text('Audio'),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: _clipboardEnabled,
+              onChanged: (bool value) => setState(() => _clipboardEnabled = value),
+              title: const Text('Clipboard sync'),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: <Widget>[
+                FilledButton.icon(
+                  onPressed: _busy ? null : _startSession,
+                  icon: const Icon(Icons.play_arrow),
+                  label: const Text('Start'),
+                ),
+                const SizedBox(width: 12),
+                OutlinedButton.icon(
+                  onPressed: _busy ? null : _stopSession,
+                  icon: const Icon(Icons.stop),
+                  label: const Text('Stop'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Screenscrab uses the local Tailscale tailnet for peer discovery and transport. No Screenscrab cloud account is required.',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusPanel(ThemeData theme) {
+    final Color accent = _status.sessionActive ? Colors.green : Colors.blueGrey;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text('Engine Status', style: theme.textTheme.headlineSmall),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: <Widget>[
+                _StatusChip(label: 'Loaded', value: _status.engineLoaded),
+                _StatusChip(label: 'Session', value: _status.sessionActive),
+                _StatusChip(label: 'Tailnet', value: _status.tailscaleReachable || _tailscaleCommandPresent),
+                _StatusChip(label: 'Capture', value: _status.captureReady),
+                _StatusChip(label: 'Audio', value: _status.audioReady),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: CircleAvatar(backgroundColor: accent, child: const Icon(Icons.settings_ethernet)),
+              title: Text('Mode: ${_status.mode}'),
+              subtitle: Text('Monitor ${_status.monitorIndex + 1} | Last error ${_status.lastError}'),
+            ),
+            Text('Native message: ${_status.lastErrorMessage.isEmpty ? _diagnosticMessage : _status.lastErrorMessage}'),
+            Text('UI state: ${_connectionState.name}'),
+            const SizedBox(height: 12),
+            ExpansionTile(
+              title: const Text('Discovered devices'),
+              initiallyExpanded: true,
+              children: <Widget>[
+                for (final DeviceEndpoint device in _devices)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.computer),
+                    title: Text(device.name),
+                    subtitle: Text('${device.address} | ${device.mode.name}'),
+                    trailing: Text(device.lastSeenUtc.toIso8601String()),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({required this.label, required this.value});
+
+  final String label;
+  final bool value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Chip(
+      avatar: Icon(value ? Icons.check_circle : Icons.cancel, size: 18),
+      label: Text('$label: ${value ? 'yes' : 'no'}'),
+    );
+  }
+}

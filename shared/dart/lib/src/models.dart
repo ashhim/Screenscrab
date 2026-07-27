@@ -7,6 +7,48 @@ enum ConnectionStateValue { disconnected, connecting, connected, reconnecting, e
 enum MonitorSelectionMode { primary, specific, all }
 
 @immutable
+class EngineRuntimeStatus {
+  const EngineRuntimeStatus({
+    required this.apiVersion,
+    required this.mode,
+    required this.engineLoaded,
+    required this.sessionActive,
+    required this.tailscaleReachable,
+    required this.captureReady,
+    required this.audioReady,
+    required this.monitorIndex,
+    required this.lastError,
+    required this.lastErrorMessage,
+  });
+
+  final int apiVersion;
+  final String mode;
+  final bool engineLoaded;
+  final bool sessionActive;
+  final bool tailscaleReachable;
+  final bool captureReady;
+  final bool audioReady;
+  final int monitorIndex;
+  final int lastError;
+  final String lastErrorMessage;
+
+  factory EngineRuntimeStatus.fromJson(Map<String, dynamic> json) {
+    return EngineRuntimeStatus(
+      apiVersion: (json['apiVersion'] as num?)?.toInt() ?? 1,
+      mode: (json['mode'] as String?) ?? 'stopped',
+      engineLoaded: json['engineLoaded'] as bool? ?? false,
+      sessionActive: json['sessionActive'] as bool? ?? false,
+      tailscaleReachable: json['tailscaleReachable'] as bool? ?? false,
+      captureReady: json['captureReady'] as bool? ?? false,
+      audioReady: json['audioReady'] as bool? ?? false,
+      monitorIndex: (json['monitorIndex'] as num?)?.toInt() ?? 0,
+      lastError: (json['lastError'] as num?)?.toInt() ?? 0,
+      lastErrorMessage: (json['lastErrorMessage'] as String?) ?? '',
+    );
+  }
+}
+
+@immutable
 class DeviceEndpoint {
   const DeviceEndpoint({
     required this.deviceId,

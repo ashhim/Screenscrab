@@ -1,10 +1,11 @@
-package com.example.screenscrab_android
+package com.ashhim.screenscrab
 
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioFormat
+import android.media.AudioManager
 import android.media.AudioTrack
 import android.os.Build
 import androidx.annotation.NonNull
@@ -26,6 +27,11 @@ class MainActivity : FlutterActivity() {
                     clipboard.setPrimaryClip(ClipData.newPlainText("Screenscrab", text))
                     result.success(true)
                 }
+                "readClipboardText" -> {
+                    val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    val clip = clipboard.primaryClip
+                    result.success(clip?.getItemAt(0)?.coerceToText(this)?.toString().orEmpty())
+                }
                 "playAudioPlaceholder" -> {
                     val attributes = AudioAttributes.Builder()
                         .setUsage(AudioAttributes.USAGE_MEDIA)
@@ -39,12 +45,23 @@ class MainActivity : FlutterActivity() {
                     val track = AudioTrack.Builder()
                         .setAudioAttributes(attributes)
                         .setAudioFormat(format)
-                        .setBufferSizeInBytes(AudioTrack.getMinBufferSize(48000, AudioFormat.CHANNEL_OUT_STEREO, AudioFormat.ENCODING_PCM_16BIT))
                         .setTransferMode(AudioTrack.MODE_STREAM)
+                        .setBufferSizeInBytes(
+                            AudioTrack.getMinBufferSize(
+                                48000,
+                                AudioFormat.CHANNEL_OUT_STEREO,
+                                AudioFormat.ENCODING_PCM_16BIT
+                            )
+                        )
                         .build()
+                    track.play()
+                    track.stop()
                     track.release()
                     result.success(true)
                 }
+                "touchToMouse" -> result.success(true)
+                "sendKeyEvent" -> result.success(true)
+                "decodeFrame" -> result.success(true)
                 else -> result.notImplemented()
             }
         }

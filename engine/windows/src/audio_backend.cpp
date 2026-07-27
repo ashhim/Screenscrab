@@ -1,5 +1,8 @@
 #include "audio_backend.h"
 
+#include <mmdeviceapi.h>
+#include <audioclient.h>
+
 namespace screenscrab::native {
 
 bool AudioBackend::initialize() {

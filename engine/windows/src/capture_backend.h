@@ -8,6 +8,7 @@ namespace screenscrab::native {
 struct CaptureFrame {
   std::uint32_t width{0};
   std::uint32_t height{0};
+  std::uint32_t stride_bytes{0};
   std::vector<std::uint8_t> rgba;
 };
 

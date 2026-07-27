@@ -9,6 +9,13 @@ Screenscrab is a personal-use remote desktop system built as a monorepo with:
 - `installer`: packaging assets and installer scripts
 - `scripts`: terminal-first build and packaging automation
 
+Current implementation status:
+
+- Windows Flutter UI loads a native DLL when present and surfaces engine status in the UI.
+- The Windows C++ engine now includes concrete capture, transport, input, clipboard, and session modules.
+- The Android client includes a native bridge for clipboard, audio probing, touch input, and keyboard event forwarding.
+- Shared Dart and C++ protocol code now defines a versioned binary wire frame alongside control-message helpers.
+
 ## Current architecture
 
 The repo is organized to keep UI, protocol, and native performance code separated:
@@ -41,6 +48,11 @@ Run from PowerShell at the repo root:
 .\scripts\build-windows.ps1
 .\scripts\build-android.ps1
 ```
+
+Release outputs are written to:
+
+- `apps/windows/build/windows/x64/runner/Release`
+- `apps/android/build/app/outputs/flutter-apk`
 
 ## Packaging
 

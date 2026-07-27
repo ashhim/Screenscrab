@@ -13,6 +13,7 @@ add_library(screencrab_engine SHARED
   src/encode_backend.cpp
   src/api.cpp
   src/logging.cpp
+  src/engine_state.cpp
   src/input_injector.cpp
   src/session_manager.cpp
   src/transfer_service.cpp
@@ -26,4 +27,4 @@ target_include_directories(screencrab_engine
 )
 
 target_compile_definitions(screencrab_engine PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
-target_link_libraries(screencrab_engine PRIVATE ws2_32)
+target_link_libraries(screencrab_engine PRIVATE ws2_32 d3d11 dxgi ole32 gdi32 user32 winmm avrt)
