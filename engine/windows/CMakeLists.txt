@@ -39,12 +39,26 @@ set_target_properties(screencrab_engine PROPERTIES
 )
 
 set(SCRSCRAB_APP_RELEASE_DIR "" CACHE PATH "Optional Flutter Windows release output directory")
+set(NETWORK_DLL_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/../../network/out/screenscrab_network.dll")
+set(NETWORK_DLL_DEST "${CMAKE_CURRENT_BINARY_DIR}/out/screencrab_network.dll")
+
+add_custom_command(TARGET screencrab_engine POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:screencrab_engine>"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "${NETWORK_DLL_SOURCE}"
+    "${NETWORK_DLL_DEST}"
+  VERBATIM
+)
+
 if(SCRSCRAB_APP_RELEASE_DIR)
   add_custom_command(TARGET screencrab_engine POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "${SCRSCRAB_APP_RELEASE_DIR}"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
       "$<TARGET_FILE:screencrab_engine>"
       "${SCRSCRAB_APP_RELEASE_DIR}/screencrab_engine.dll"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      "${NETWORK_DLL_SOURCE}"
+      "${SCRSCRAB_APP_RELEASE_DIR}/screencrab_network.dll"
     VERBATIM
   )
 endif()

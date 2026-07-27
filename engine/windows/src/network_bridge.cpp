@@ -33,13 +33,28 @@ std::string read_string(const std::string& text) {
 std::string load_runtime_path() {
   static const std::vector<std::string> candidates = {
       "screenscrab_network.dll",
+      "screencrab_network.dll",
       "./screenscrab_network.dll",
+      "./screencrab_network.dll",
       "./network/.tmp-cgo/screenscrab_network.dll",
       "./engine/windows/out/screenscrab_network.dll",
+      "./engine/windows/build/out/screenscrab_network.dll",
   };
   for (const auto& candidate : candidates) {
     if (std::filesystem::exists(candidate)) {
       return candidate;
+    }
+  }
+  char module_path[MAX_PATH] = {};
+  const auto module_length = GetModuleFileNameA(nullptr, module_path, MAX_PATH);
+  if (module_length > 0 && module_length < MAX_PATH) {
+    const std::filesystem::path executable_path(module_path);
+    const std::filesystem::path executable_dir = executable_path.parent_path();
+    for (const auto& candidate_name : {"screenscrab_network.dll", "screencrab_network.dll"}) {
+      const std::filesystem::path candidate_path = executable_dir / candidate_name;
+      if (std::filesystem::exists(candidate_path)) {
+        return candidate_path.string();
+      }
     }
   }
   return {};

@@ -45,20 +45,27 @@ const char* transport_name(screenscrab::native::SessionTransportState state) {
   }
 }
 
-std::string status_json(const screenscrab::native::SessionSnapshot& snapshot) {
+std::string status_json(const screenscrab::native::SessionSnapshot& snapshot, const screenscrab::native::NetworkBridge& network) {
+  const auto identity = network.identity();
+  const auto peers = network.peers();
+  const bool runtime_signed_in = identity.signed_in;
+  const bool runtime_peers_available = !peers.empty();
+  const bool runtime_reachable = runtime_signed_in || runtime_peers_available || !identity.tailscale_ip.empty();
+  const std::string endpoint = snapshot.endpoint.empty() && !identity.tailscale_ip.empty() ? identity.tailscale_ip : snapshot.endpoint;
+  const std::string last_error_message = snapshot.last_error_message.empty() ? network.last_error_message() : snapshot.last_error_message;
   return std::string("{\"apiVersion\":1,\"protocolVersion\":1,\"mode\":\"") + mode_name(snapshot.mode) +
          "\",\"transportState\":\"" + transport_name(snapshot.transport_state) +
-         "\",\"engineLoaded\":true,\"sessionActive\":" + (snapshot.session_active ? "true" : "false") +
-         ",\"tailscaleReachable\":" + (snapshot.tailscale_reachable ? "true" : "false") +
+         "\",\"engineLoaded\":true,\"sessionActive\":" + (snapshot.session_active || runtime_signed_in ? "true" : "false") +
+         ",\"tailscaleReachable\":" + (snapshot.tailscale_reachable || runtime_reachable ? "true" : "false") +
          ",\"captureActive\":" + (snapshot.capture_active ? "true" : "false") +
          ",\"inputEnabled\":" + (snapshot.input_enabled ? "true" : "false") +
          ",\"clipboardEnabled\":" + (snapshot.clipboard_enabled ? "true" : "false") +
          ",\"audioEnabled\":" + (snapshot.audio_enabled ? "true" : "false") +
          ",\"monitorIndex\":" + std::to_string(snapshot.monitor_index) +
          ",\"port\":" + std::to_string(snapshot.port) + ",\"framesSent\":" + std::to_string(snapshot.frames_sent) +
-         ",\"endpoint\":\"" + snapshot.endpoint + "\",\"encoder\":\"" + snapshot.encoder_name +
+         ",\"endpoint\":\"" + endpoint + "\",\"encoder\":\"" + snapshot.encoder_name +
          "\",\"lastError\":" + std::to_string(snapshot.last_error) + ",\"lastErrorMessage\":\"" +
-         snapshot.last_error_message + "\"}";
+         last_error_message + "\"}";
 }
 }
 
@@ -85,7 +92,9 @@ const char* screencrab_engine_capabilities_json() {
 
 void* screencrab_engine_create() {
   try {
-    return new screenscrab::native::EngineHandle{};
+    auto* handle = new screenscrab::native::EngineHandle{};
+    handle->network.start();
+    return handle;
   } catch (...) {
     return nullptr;
   }
@@ -135,8 +144,9 @@ const char* screencrab_engine_status_json(void* engine) {
     return "{\"apiVersion\":1,\"protocolVersion\":1,\"mode\":\"stopped\",\"transportState\":\"offline\",\"engineLoaded\":false,\"sessionActive\":false,\"tailscaleReachable\":false,\"captureActive\":false,\"inputEnabled\":false,\"clipboardEnabled\":false,\"audioEnabled\":false,\"monitorIndex\":0,\"port\":4545,\"framesSent\":0,\"endpoint\":\"\",\"encoder\":\"none\",\"lastError\":-1,\"lastErrorMessage\":\"engine handle is null\"}";
   }
   auto* handle = static_cast<screenscrab::native::EngineHandle*>(engine);
+  handle->network.refresh_runtime();
   thread_local std::string status;
-  status = status_json(handle->manager.snapshot());
+  status = status_json(handle->manager.snapshot(), handle->network);
   return status.c_str();
 }
 

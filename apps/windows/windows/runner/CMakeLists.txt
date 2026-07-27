@@ -38,3 +38,14 @@ target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 
 # Run the Flutter tool portions of the build. This must not be removed.
 add_dependencies(${BINARY_NAME} flutter_assemble)
+
+add_custom_command(TARGET ${BINARY_NAME} POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${BINARY_NAME}>"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../../engine/windows/build/out/screencrab_engine.dll"
+    "$<TARGET_FILE_DIR:${BINARY_NAME}>/screencrab_engine.dll"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../../network/out/screenscrab_network.dll"
+    "$<TARGET_FILE_DIR:${BINARY_NAME}>/screenscrab_network.dll"
+  VERBATIM
+)

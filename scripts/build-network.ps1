@@ -43,12 +43,15 @@ function Invoke-NetworkBuild {
     )
 
     $networkOut = Join-Path $NetworkRootPath "out"
+    $tmpCgoDir = Join-Path $NetworkRootPath ".tmp-cgo"
     New-Item -ItemType Directory -Force -Path $networkOut | Out-Null
+    New-Item -ItemType Directory -Force -Path $tmpCgoDir | Out-Null
 
     $env:CGO_ENABLED = "1"
+    $env:GOTMPDIR = $tmpCgoDir
     Push-Location $NetworkRootPath
     try {
-        & $GoExePath build -buildmode=c-shared -o (Join-Path $networkOut "screencrab_network.dll") ./capi
+        & $GoExePath build -buildmode=c-shared -o (Join-Path $networkOut "screenscrab_network.dll") ./capi
     } finally {
         Pop-Location
     }
