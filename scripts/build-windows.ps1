@@ -23,6 +23,10 @@ if (Get-Command cmake -ErrorAction SilentlyContinue) {
     } else {
         Write-Warning "Native engine DLL was not found after build."
     }
+    $networkOut = Join-Path $PWD "network\out\screencrab_network.dll"
+    if ((Test-Path $networkOut) -and (Test-Path $appOut)) {
+        Copy-Item $networkOut (Join-Path $appOut "screencrab_network.dll") -Force
+    }
     Write-Host "Native engine build complete."
 } else {
     Write-Warning "CMake is not installed. Skipping native engine build."
@@ -30,4 +34,10 @@ if (Get-Command cmake -ErrorAction SilentlyContinue) {
     flutter build windows --release
     Pop-Location
     Write-Host "Windows Flutter build complete."
+}
+
+$goExe = "C:\Program Files\Go\bin\go.exe"
+if (Test-Path $goExe) {
+    Write-Host "Building embedded network runtime..."
+    & "$PSScriptRoot\build-network.ps1"
 }
