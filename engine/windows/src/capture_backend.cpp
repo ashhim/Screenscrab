@@ -1,5 +1,6 @@
 #include "capture_backend.h"
 
+#include <chrono>
 #include <d3d11.h>
 #include <dxgi1_2.h>
 #include <wrl/client.h>
@@ -62,25 +63,29 @@ bool create_capture_context(std::uint32_t monitor_index, DxgiCaptureContext& con
 }
 }  // namespace
 
+struct CaptureBackend::Impl {
+  DxgiCaptureContext context;
+  std::uint32_t monitor_index{0};
+  bool ready{false};
+};
+
 bool CaptureBackend::initialize(std::uint32_t monitor_index) {
   monitor_index_ = monitor_index;
-  initialized_ = true;
-  return true;
+  impl_ = std::make_unique<Impl>();
+  impl_->monitor_index = monitor_index;
+  impl_->ready = create_capture_context(monitor_index, impl_->context);
+  initialized_ = impl_->ready;
+  return initialized_;
 }
 
 bool CaptureBackend::capture(CaptureFrame& frame) {
-  if (!initialized_) {
-    return false;
-  }
-
-  DxgiCaptureContext context;
-  if (!create_capture_context(monitor_index_, context)) {
+  if (!initialized_ || impl_ == nullptr || !impl_->ready) {
     return false;
   }
 
   DXGI_OUTDUPL_FRAME_INFO frame_info{};
   ComPtr<IDXGIResource> resource;
-  HRESULT hr = context.duplication->AcquireNextFrame(16, &frame_info, &resource);
+  HRESULT hr = impl_->context.duplication->AcquireNextFrame(16, &frame_info, &resource);
   if (FAILED(hr)) {
     return false;
   }
@@ -92,7 +97,7 @@ bool CaptureBackend::capture(CaptureFrame& frame) {
         duplication->ReleaseFrame();
       }
     }
-  } guard{context.duplication.Get()};
+  } guard{impl_->context.duplication.Get()};
 
   ComPtr<ID3D11Texture2D> texture;
   if (FAILED(resource.As(&texture))) {
@@ -107,32 +112,46 @@ bool CaptureBackend::capture(CaptureFrame& frame) {
   desc.MiscFlags = 0;
 
   ComPtr<ID3D11Texture2D> staging;
-  if (FAILED(context.device->CreateTexture2D(&desc, nullptr, &staging))) {
+  if (FAILED(impl_->context.device->CreateTexture2D(&desc, nullptr, &staging))) {
     return false;
   }
 
-  context.context->CopyResource(staging.Get(), texture.Get());
+  impl_->context.context->CopyResource(staging.Get(), texture.Get());
 
   D3D11_MAPPED_SUBRESOURCE mapped{};
-  if (FAILED(context.context->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped))) {
+  if (FAILED(impl_->context.context->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped))) {
     return false;
   }
 
   frame.width = desc.Width;
   frame.height = desc.Height;
   frame.stride_bytes = mapped.RowPitch;
+  frame.pixel_format = PixelFormat::kBgra32;
+  frame.timestamp_utc_us = static_cast<std::uint64_t>(
+      std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch())
+          .count());
+  frame.monitor_index = monitor_index_;
   frame.rgba.resize(static_cast<std::size_t>(mapped.RowPitch) * desc.Height);
   const auto* source = static_cast<const std::uint8_t*>(mapped.pData);
   for (UINT row = 0; row < desc.Height; ++row) {
     std::copy_n(source + (mapped.RowPitch * row), mapped.RowPitch,
                 frame.rgba.data() + (mapped.RowPitch * row));
   }
-  context.context->Unmap(staging.Get(), 0);
+  impl_->context.context->Unmap(staging.Get(), 0);
   return true;
 }
 
 void CaptureBackend::shutdown() {
+  impl_.reset();
   initialized_ = false;
+}
+
+bool CaptureBackend::initialized() const noexcept {
+  return initialized_;
+}
+
+std::uint32_t CaptureBackend::monitor_index() const noexcept {
+  return monitor_index_;
 }
 
 }  // namespace screenscrab::native

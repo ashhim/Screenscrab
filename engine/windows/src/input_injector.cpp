@@ -9,11 +9,24 @@ bool InputInjector::initialize() {
 }
 
 bool InputInjector::move_mouse(std::int32_t x, std::int32_t y) {
+  const int virtual_width = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+  const int virtual_height = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+  const int virtual_left = GetSystemMetrics(SM_XVIRTUALSCREEN);
+  const int virtual_top = GetSystemMetrics(SM_YVIRTUALSCREEN);
+
+  const int clamped_x = x < virtual_left ? virtual_left : (x > virtual_left + virtual_width ? virtual_left + virtual_width : x);
+  const int clamped_y = y < virtual_top ? virtual_top : (y > virtual_top + virtual_height ? virtual_top + virtual_height : y);
+
+  const std::int32_t normalized_x = virtual_width <= 1 ? 0 :
+      static_cast<std::int32_t>(((clamped_x - virtual_left) * 65535LL) / (virtual_width - 1));
+  const std::int32_t normalized_y = virtual_height <= 1 ? 0 :
+      static_cast<std::int32_t>(((clamped_y - virtual_top) * 65535LL) / (virtual_height - 1));
+
   INPUT input{};
   input.type = INPUT_MOUSE;
-  input.mi.dx = x;
-  input.mi.dy = y;
-  input.mi.dwFlags = MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE;
+  input.mi.dx = normalized_x;
+  input.mi.dy = normalized_y;
+  input.mi.dwFlags = MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK;
   return SendInput(1, &input, sizeof(INPUT)) == 1;
 }
 

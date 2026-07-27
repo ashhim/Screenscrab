@@ -35,10 +35,15 @@ class AndroidScreenscrabBridge {
         false;
   }
 
-  Future<bool> decodeFrame(Uint8List frameBytes, {required int width, required int height}) async {
+  Future<bool> renderFrame(Uint8List frameBytes, {required int width, required int height, required int strideBytes}) async {
     return await _channel.invokeMethod<bool>(
-          'decodeFrame',
-          <String, Object?>{'frameBytes': frameBytes, 'width': width, 'height': height},
+          'renderFrame',
+          <String, Object?>{
+            'frameBytes': frameBytes,
+            'width': width,
+            'height': height,
+            'strideBytes': strideBytes,
+          },
         ) ??
         false;
   }

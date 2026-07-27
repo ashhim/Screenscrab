@@ -96,6 +96,46 @@ class SessionCodec {
     );
   }
 
+  static WirePacket pong(int nonce) => ping(nonce).copyWith(type: MessageType.pong);
+
+  static WirePacket mouseEvent({
+    required int x,
+    required int y,
+    required int wheelDelta,
+    required int buttons,
+    required int flags,
+  }) {
+    final ByteData payload = ByteData(24);
+    payload.setUint32(0, 0, Endian.little);
+    payload.setInt32(4, x, Endian.little);
+    payload.setInt32(8, y, Endian.little);
+    payload.setInt32(12, wheelDelta, Endian.little);
+    payload.setUint32(16, buttons, Endian.little);
+    payload.setUint32(20, flags, Endian.little);
+    return WirePacket(
+      type: MessageType.inputEvent,
+      payload: payload.buffer.asUint8List(),
+      timestampUtc: DateTime.now().toUtc(),
+    );
+  }
+
+  static WirePacket keyEvent({
+    required int virtualKey,
+    required int scanCode,
+    required bool down,
+  }) {
+    final ByteData payload = ByteData(16);
+    payload.setUint32(0, 1, Endian.little);
+    payload.setUint32(4, virtualKey, Endian.little);
+    payload.setUint32(8, scanCode, Endian.little);
+    payload.setUint32(12, down ? 1 : 0, Endian.little);
+    return WirePacket(
+      type: MessageType.inputEvent,
+      payload: payload.buffer.asUint8List(),
+      timestampUtc: DateTime.now().toUtc(),
+    );
+  }
+
   static WirePacket clipboardText(String text) {
     final List<int> data = utf8.encode(text);
     final ByteData header = ByteData(4 + data.length);
@@ -118,6 +158,22 @@ class SessionCodec {
       type: MessageType.disconnect,
       payload: header.buffer.asUint8List(),
       timestampUtc: DateTime.now().toUtc(),
+    );
+  }
+}
+
+extension on WirePacket {
+  WirePacket copyWith({
+    MessageType? type,
+    Uint8List? payload,
+    DateTime? timestampUtc,
+    int? flags,
+  }) {
+    return WirePacket(
+      type: type ?? this.type,
+      payload: payload ?? this.payload,
+      timestampUtc: timestampUtc ?? this.timestampUtc,
+      flags: flags ?? this.flags,
     );
   }
 }

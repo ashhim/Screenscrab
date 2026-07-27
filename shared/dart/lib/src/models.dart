@@ -10,38 +10,62 @@ enum MonitorSelectionMode { primary, specific, all }
 class EngineRuntimeStatus {
   const EngineRuntimeStatus({
     required this.apiVersion,
+    required this.protocolVersion,
     required this.mode,
+    required this.transportState,
     required this.engineLoaded,
     required this.sessionActive,
     required this.tailscaleReachable,
-    required this.captureReady,
-    required this.audioReady,
+    required this.captureActive,
+    required this.inputEnabled,
+    required this.clipboardEnabled,
+    required this.audioEnabled,
     required this.monitorIndex,
+    required this.port,
+    required this.framesSent,
+    required this.endpoint,
+    required this.encoder,
     required this.lastError,
     required this.lastErrorMessage,
   });
 
   final int apiVersion;
+  final int protocolVersion;
   final String mode;
+  final String transportState;
   final bool engineLoaded;
   final bool sessionActive;
   final bool tailscaleReachable;
-  final bool captureReady;
-  final bool audioReady;
+  final bool captureActive;
+  final bool inputEnabled;
+  final bool clipboardEnabled;
+  final bool audioEnabled;
   final int monitorIndex;
+  final int port;
+  final int framesSent;
+  final String endpoint;
+  final String encoder;
   final int lastError;
   final String lastErrorMessage;
 
   factory EngineRuntimeStatus.fromJson(Map<String, dynamic> json) {
     return EngineRuntimeStatus(
       apiVersion: (json['apiVersion'] as num?)?.toInt() ?? 1,
+      protocolVersion: (json['protocolVersion'] as num?)?.toInt() ?? 1,
       mode: (json['mode'] as String?) ?? 'stopped',
+      transportState: (json['transportState'] as String?) ?? 'offline',
       engineLoaded: json['engineLoaded'] as bool? ?? false,
       sessionActive: json['sessionActive'] as bool? ?? false,
       tailscaleReachable: json['tailscaleReachable'] as bool? ?? false,
-      captureReady: json['captureReady'] as bool? ?? false,
-      audioReady: json['audioReady'] as bool? ?? false,
+      captureActive: json['captureActive'] as bool? ?? false,
+      inputEnabled: json['inputEnabled'] as bool? ?? false,
+      clipboardEnabled: json['clipboardEnabled'] as bool? ?? false,
+      audioEnabled: json['audioEnabled'] as bool? ?? false,
       monitorIndex: (json['monitorIndex'] as num?)?.toInt() ?? 0,
+      port: (json['port'] as num?)?.toInt() ?? 4545,
+      framesSent: (json['framesSent'] as num?)?.toInt() ?? 0,
+      endpoint: (json['endpoint'] as String?) ?? '',
+      encoder: (json['encoder'] as String?) ?? 'none',
       lastError: (json['lastError'] as num?)?.toInt() ?? 0,
       lastErrorMessage: (json['lastErrorMessage'] as String?) ?? '',
     );

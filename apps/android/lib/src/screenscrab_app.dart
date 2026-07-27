@@ -1,10 +1,12 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:screenscrab_shared/screenscrab_shared.dart';
 
 import 'android_bridge.dart';
+import 'remote_session_client.dart';
 
 class ScreenscrabAndroidApp extends StatelessWidget {
   const ScreenscrabAndroidApp({super.key});
@@ -32,6 +34,7 @@ class AndroidHomePage extends StatefulWidget {
 
 class _AndroidHomePageState extends State<AndroidHomePage> {
   final AndroidScreenscrabBridge _bridge = AndroidScreenscrabBridge();
+  late final RemoteSessionClient _client;
   final TextEditingController _hostController = TextEditingController(text: '100.64.10.21');
   final TextEditingController _portController = TextEditingController(text: '4545');
   final TextEditingController _clipboardController = TextEditingController();
@@ -50,13 +53,39 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
   String _platformVersion = 'unknown';
   String _clipboardText = '';
   String _lastAction = 'Idle';
+  String _lastStatus = 'Disconnected';
   bool _audioEnabled = true;
   bool _clipboardSyncEnabled = true;
+  int _framesReceived = 0;
   final FocusNode _keyboardFocusNode = FocusNode();
 
   @override
   void initState() {
     super.initState();
+    _client = RemoteSessionClient(
+      bridge: _bridge,
+      onConnectionStateChanged: (ConnectionStateValue state) {
+        if (!mounted) {
+          return;
+        }
+        setState(() => _state = state);
+      },
+      onStatus: (String message) {
+        if (!mounted) {
+          return;
+        }
+        setState(() => _lastStatus = message);
+      },
+      onError: (String message) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _lastStatus = message;
+          _lastAction = message;
+        });
+      },
+    );
     _bootstrap();
     _timer = Timer.periodic(const Duration(seconds: 3), (_) => _refresh());
   }
@@ -64,6 +93,7 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
   @override
   void dispose() {
     _timer?.cancel();
+    _client.disconnect();
     _hostController.dispose();
     _portController.dispose();
     _clipboardController.dispose();
@@ -88,30 +118,39 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
     setState(() {
       _clipboardText = clipboard;
       _clipboardController.text = clipboard;
+      _framesReceived = _client.framesReceived;
     });
   }
 
   Future<void> _connect() async {
-    setState(() => _state = ConnectionStateValue.connecting);
-    await Future<void>.delayed(const Duration(milliseconds: 250));
+    final int port = int.tryParse(_portController.text.trim()) ?? 4545;
+    await _client.connect(host: _hostController.text.trim(), port: port);
     if (!mounted) {
       return;
     }
     setState(() {
-      _state = ConnectionStateValue.connected;
-      _lastAction = 'Connected to ${_hostController.text}:${_portController.text}';
+      _lastAction = 'Connecting to ${_hostController.text.trim()}:$port';
+      _lastStatus = 'Connection requested';
     });
   }
 
   Future<void> _disconnect() async {
+    await _client.disconnect();
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _state = ConnectionStateValue.disconnected;
       _lastAction = 'Disconnected';
+      _lastStatus = 'Disconnected';
     });
   }
 
   Future<void> _syncClipboard() async {
     final bool ok = await _bridge.setClipboardText(_clipboardController.text);
+    if (_clipboardSyncEnabled) {
+      await _client.syncClipboard(_clipboardController.text);
+    }
     if (!mounted) {
       return;
     }
@@ -130,12 +169,118 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
     });
   }
 
-  Future<void> _sendTouch(Offset localPosition, String action) async {
-    await _bridge.touchToMouse(x: localPosition.dx, y: localPosition.dy, action: action);
+  Future<void> _sendTouch(Offset localPosition, String action, Size surfaceSize) async {
+    if (action == 'wheel') {
+      await _client.sendWheel(delta: 120);
+    } else if (action == 'down') {
+      await _client.sendMouseButton(localPosition: localPosition, surfaceSize: surfaceSize, down: true, button: 1);
+    } else if (action == 'up') {
+      await _client.sendMouseButton(localPosition: localPosition, surfaceSize: surfaceSize, down: false, button: 1);
+    } else {
+      await _client.sendMousePosition(localPosition, surfaceSize);
+    }
     if (!mounted) {
       return;
     }
     setState(() => _lastAction = 'Touch $action at ${localPosition.dx.toStringAsFixed(0)}, ${localPosition.dy.toStringAsFixed(0)}');
+  }
+
+  int _windowsVirtualKey(LogicalKeyboardKey key) {
+    final String label = key.keyLabel;
+    if (label.length == 1) {
+      final int code = label.toUpperCase().codeUnitAt(0);
+      if ((code >= 0x30 && code <= 0x39) || (code >= 0x41 && code <= 0x5A)) {
+        return code;
+      }
+    }
+    if (key == LogicalKeyboardKey.enter) return 0x0D;
+    if (key == LogicalKeyboardKey.escape) return 0x1B;
+    if (key == LogicalKeyboardKey.backspace) return 0x08;
+    if (key == LogicalKeyboardKey.tab) return 0x09;
+    if (key == LogicalKeyboardKey.space) return 0x20;
+    if (key == LogicalKeyboardKey.arrowLeft) return 0x25;
+    if (key == LogicalKeyboardKey.arrowUp) return 0x26;
+    if (key == LogicalKeyboardKey.arrowRight) return 0x27;
+    if (key == LogicalKeyboardKey.arrowDown) return 0x28;
+    if (key == LogicalKeyboardKey.delete) return 0x2E;
+    if (key == LogicalKeyboardKey.home) return 0x24;
+    if (key == LogicalKeyboardKey.end) return 0x23;
+    if (key == LogicalKeyboardKey.pageUp) return 0x21;
+    if (key == LogicalKeyboardKey.pageDown) return 0x22;
+    if (key == LogicalKeyboardKey.shiftLeft || key == LogicalKeyboardKey.shiftRight) return 0x10;
+    if (key == LogicalKeyboardKey.controlLeft || key == LogicalKeyboardKey.controlRight) return 0x11;
+    if (key == LogicalKeyboardKey.altLeft || key == LogicalKeyboardKey.altRight) return 0x12;
+    return 0;
+  }
+
+  void _sendKeyEvent(KeyEvent event) {
+    final int virtualKey = _windowsVirtualKey(event.logicalKey);
+    if (virtualKey == 0) {
+      return;
+    }
+    _client.sendKeyEvent(keyCode: virtualKey, down: event is KeyDownEvent);
+  }
+
+  Widget _buildRemoteSurface(ThemeData theme) {
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final Size surfaceSize = Size(constraints.maxWidth, 280);
+        return Listener(
+          onPointerSignal: (PointerSignalEvent event) {
+            if (event is PointerScrollEvent) {
+              _sendTouch(event.localPosition, 'wheel', surfaceSize);
+            }
+          },
+          child: GestureDetector(
+            onTapDown: (TapDownDetails details) => _sendTouch(details.localPosition, 'down', surfaceSize),
+            onTapUp: (TapUpDetails details) => _sendTouch(details.localPosition, 'up', surfaceSize),
+            onPanDown: (DragDownDetails details) => _sendTouch(details.localPosition, 'down', surfaceSize),
+            onPanUpdate: (DragUpdateDetails details) => _sendTouch(details.localPosition, 'move', surfaceSize),
+            onSecondaryTapDown: (TapDownDetails details) => _sendTouch(details.localPosition, 'down', surfaceSize),
+            child: Container(
+              height: 280,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: <Color>[theme.colorScheme.primaryContainer, theme.colorScheme.surfaceContainerHighest],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: theme.colorScheme.outlineVariant),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: <Widget>[
+                    AndroidView(
+                      viewType: 'screenscrab/remote_display',
+                      creationParamsCodec: StandardMessageCodec(),
+                    ),
+                    Positioned(
+                      left: 12,
+                      top: 12,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surface.withValues(alpha: 0.78),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        child: Text(
+                            _state == ConnectionStateValue.connected ? 'Live remote display' : 'Connect to stream the desktop',
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -169,11 +314,13 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
                       _StatusPill(label: 'State', value: _state.name),
                       _StatusPill(label: 'Audio', value: _audioEnabled ? 'enabled' : 'off'),
                       _StatusPill(label: 'Clipboard', value: _clipboardSyncEnabled ? 'enabled' : 'off'),
+                      _StatusPill(label: 'Frames', value: _framesReceived.toString()),
                     ],
                   ),
                   const SizedBox(height: 12),
                   Text('Platform: $_platformVersion'),
                   Text('Last action: $_lastAction'),
+                  Text('Status: $_lastStatus'),
                 ],
               ),
             ),
@@ -220,35 +367,10 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
             focusNode: _keyboardFocusNode,
             autofocus: true,
             onKeyEvent: (FocusNode node, KeyEvent event) {
-              _bridge.sendKeyEvent(
-                keyCode: event.logicalKey.keyId,
-                down: event is KeyDownEvent,
-              );
+              _sendKeyEvent(event);
               return KeyEventResult.ignored;
             },
-            child: GestureDetector(
-              onPanDown: (DragDownDetails details) => _sendTouch(details.localPosition, 'down'),
-              onPanUpdate: (DragUpdateDetails details) => _sendTouch(details.localPosition, 'move'),
-              onTapUp: (TapUpDetails details) => _sendTouch(details.localPosition, 'tap'),
-              child: Container(
-                height: 280,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: <Color>[theme.colorScheme.primaryContainer, theme.colorScheme.surfaceContainerHighest],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: theme.colorScheme.outlineVariant),
-                ),
-                child: const Center(
-                  child: Text(
-                    'Remote screen surface\n(native decoder hookup pending)',
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
-            ),
+            child: _buildRemoteSurface(theme),
           ),
           const SizedBox(height: 16),
           Card(

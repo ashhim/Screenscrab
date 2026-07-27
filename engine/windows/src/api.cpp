@@ -5,7 +5,6 @@
 #include <string>
 
 #include "logging.h"
-#include "engine_state.h"
 #include "session_manager.h"
 
 namespace {
@@ -16,10 +15,53 @@ constexpr const char kCapabilities[] =
     "{\"capture\":true,\"encode\":true,\"transport\":true,\"input\":true,"
     "\"clipboard\":true,\"fileTransfer\":true,\"audio\":true,\"multiMonitor\":true,"
     "\"lockedScreen\":true,\"hostMode\":true,\"clientMode\":true}";
+
+const char* mode_name(screenscrab::native::SessionMode mode) {
+  switch (mode) {
+    case screenscrab::native::SessionMode::kHost:
+      return "host";
+    case screenscrab::native::SessionMode::kClient:
+      return "client";
+    case screenscrab::native::SessionMode::kStopped:
+    default:
+      return "stopped";
+  }
+}
+
+const char* transport_name(screenscrab::native::SessionTransportState state) {
+  switch (state) {
+    case screenscrab::native::SessionTransportState::kListening:
+      return "listening";
+    case screenscrab::native::SessionTransportState::kConnecting:
+      return "connecting";
+    case screenscrab::native::SessionTransportState::kConnected:
+      return "connected";
+    case screenscrab::native::SessionTransportState::kRetrying:
+      return "retrying";
+    case screenscrab::native::SessionTransportState::kOffline:
+    default:
+      return "offline";
+  }
+}
+
+std::string status_json(const screenscrab::native::SessionSnapshot& snapshot) {
+  return std::string("{\"apiVersion\":1,\"protocolVersion\":1,\"mode\":\"") + mode_name(snapshot.mode) +
+         "\",\"transportState\":\"" + transport_name(snapshot.transport_state) +
+         "\",\"engineLoaded\":true,\"sessionActive\":" + (snapshot.session_active ? "true" : "false") +
+         ",\"tailscaleReachable\":" + (snapshot.tailscale_reachable ? "true" : "false") +
+         ",\"captureActive\":" + (snapshot.capture_active ? "true" : "false") +
+         ",\"inputEnabled\":" + (snapshot.input_enabled ? "true" : "false") +
+         ",\"clipboardEnabled\":" + (snapshot.clipboard_enabled ? "true" : "false") +
+         ",\"audioEnabled\":" + (snapshot.audio_enabled ? "true" : "false") +
+         ",\"monitorIndex\":" + std::to_string(snapshot.monitor_index) +
+         ",\"port\":" + std::to_string(snapshot.port) + ",\"framesSent\":" + std::to_string(snapshot.frames_sent) +
+         ",\"endpoint\":\"" + snapshot.endpoint + "\",\"encoder\":\"" + snapshot.encoder_name +
+         "\",\"lastError\":" + std::to_string(snapshot.last_error) + ",\"lastErrorMessage\":\"" +
+         snapshot.last_error_message + "\"}";
+}
 }
 
 struct screenscrab::native::EngineHandle {
-  EngineState state;
   SessionManager manager;
 };
 
@@ -41,10 +83,7 @@ const char* screencrab_engine_capabilities_json() {
 
 void* screencrab_engine_create() {
   try {
-    auto* handle = new screenscrab::native::EngineHandle{};
-    handle->state.set_engine_loaded(true);
-    handle->state.set_error(0, "initialized");
-    return handle;
+    return new screenscrab::native::EngineHandle{};
   } catch (...) {
     return nullptr;
   }
@@ -59,13 +98,7 @@ int screencrab_engine_start_host(void* engine, const char* device_name) {
     return -1;
   }
   auto* handle = static_cast<screenscrab::native::EngineHandle*>(engine);
-  handle->state.set_mode(ScreencrabEngineMode::kHost);
-  handle->state.set_tailscale_reachable(false);
   const int result = handle->manager.start_host(device_name);
-  handle->state.set_session_active(result == 0);
-  handle->state.set_error(result, result == 0 ? "ok" : "failed to start host session");
-  handle->state.set_capture_ready(result == 0);
-  handle->state.set_audio_ready(result == 0);
   return result;
 }
 
@@ -74,13 +107,7 @@ int screencrab_engine_start_client(void* engine, const char* address, std::uint1
     return -1;
   }
   auto* handle = static_cast<screenscrab::native::EngineHandle*>(engine);
-  handle->state.set_mode(ScreencrabEngineMode::kClient);
   const int result = handle->manager.start_client(address, port);
-  handle->state.set_session_active(result == 0);
-  handle->state.set_tailscale_reachable(result == 0);
-  handle->state.set_error(result, result == 0 ? "ok" : "failed to start client session");
-  handle->state.set_capture_ready(result == 0);
-  handle->state.set_audio_ready(result == 0);
   return result;
 }
 
@@ -90,9 +117,6 @@ int screencrab_engine_stop(void* engine) {
   }
   auto* handle = static_cast<screenscrab::native::EngineHandle*>(engine);
   const int result = handle->manager.stop();
-  handle->state.set_mode(ScreencrabEngineMode::kStopped);
-  handle->state.set_session_active(false);
-  handle->state.set_error(result, result == 0 ? "stopped" : "failed to stop session");
   return result;
 }
 
@@ -106,11 +130,11 @@ int screencrab_engine_last_error(void* engine) {
 
 const char* screencrab_engine_status_json(void* engine) {
   if (engine == nullptr) {
-    return "{\"apiVersion\":1,\"mode\":\"stopped\",\"engineLoaded\":false,\"sessionActive\":false,\"tailscaleReachable\":false,\"captureReady\":false,\"audioReady\":false,\"monitorIndex\":0,\"lastError\":-1}";
+    return "{\"apiVersion\":1,\"protocolVersion\":1,\"mode\":\"stopped\",\"transportState\":\"offline\",\"engineLoaded\":false,\"sessionActive\":false,\"tailscaleReachable\":false,\"captureActive\":false,\"inputEnabled\":false,\"clipboardEnabled\":false,\"audioEnabled\":false,\"monitorIndex\":0,\"port\":4545,\"framesSent\":0,\"endpoint\":\"\",\"encoder\":\"none\",\"lastError\":-1,\"lastErrorMessage\":\"engine handle is null\"}";
   }
   auto* handle = static_cast<screenscrab::native::EngineHandle*>(engine);
   thread_local std::string status;
-  status = handle->state.snapshot_json();
+  status = status_json(handle->manager.snapshot());
   return status.c_str();
 }
 
@@ -119,5 +143,7 @@ const char* screencrab_engine_last_error_message(void* engine) {
     return "engine handle is null";
   }
   auto* handle = static_cast<screenscrab::native::EngineHandle*>(engine);
-  return handle->state.last_error_message().c_str();
+  thread_local std::string message;
+  message = handle->manager.snapshot().last_error_message;
+  return message.c_str();
 }

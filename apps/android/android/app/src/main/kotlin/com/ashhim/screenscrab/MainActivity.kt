@@ -5,7 +5,6 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioFormat
-import android.media.AudioManager
 import android.media.AudioTrack
 import android.os.Build
 import androidx.annotation.NonNull
@@ -15,9 +14,15 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private val channelName = "screenscrab/native"
+    private val remoteDisplayController = RemoteDisplayController()
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        RemoteDisplayRegistry.controller = remoteDisplayController
+        flutterEngine.platformViewsController.registry.registerViewFactory(
+            "screenscrab/remote_display",
+            RemoteDisplayViewFactory(remoteDisplayController)
+        )
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName).setMethodCallHandler { call, result ->
             when (call.method) {
                 "getPlatformVersion" -> result.success("Android ${Build.VERSION.RELEASE}")
@@ -61,7 +66,13 @@ class MainActivity : FlutterActivity() {
                 }
                 "touchToMouse" -> result.success(true)
                 "sendKeyEvent" -> result.success(true)
-                "decodeFrame" -> result.success(true)
+                "renderFrame" -> {
+                    val frameBytes = call.argument<ByteArray>("frameBytes") ?: byteArrayOf()
+                    val width = call.argument<Int>("width") ?: 0
+                    val height = call.argument<Int>("height") ?: 0
+                    val strideBytes = call.argument<Int>("strideBytes") ?: 0
+                    result.success(remoteDisplayController.renderFrame(frameBytes, width, height, strideBytes))
+                }
                 else -> result.notImplemented()
             }
         }

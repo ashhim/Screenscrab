@@ -50,6 +50,20 @@ class WirePacket {
     ]);
   }
 
+  static int totalLength(Uint8List bytes) {
+    if (bytes.length < 24) {
+      throw const FormatException('wire packet too small');
+    }
+    final ByteData header = ByteData.sublistView(bytes, 0, 24);
+    if (header.getUint32(0, Endian.little) != wireMagic) {
+      throw const FormatException('wire magic mismatch');
+    }
+    if (header.getUint16(4, Endian.little) != wireVersion) {
+      throw const FormatException('wire version mismatch');
+    }
+    return 24 + header.getUint32(12, Endian.little);
+  }
+
   static WirePacket decode(Uint8List bytes) {
     if (bytes.length < 24) {
       throw FormatException('wire packet too small');
