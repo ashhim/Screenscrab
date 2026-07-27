@@ -1,0 +1,27 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  flutter:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Bootstrap
+        shell: pwsh
+        run: .\scripts\bootstrap.ps1
+      - name: Analyze Windows app
+        shell: pwsh
+        run: |
+          Set-Location apps/windows
+          flutter analyze
+      - name: Analyze Android app
+        shell: pwsh
+        run: |
+          Set-Location apps/android
+          flutter analyze
