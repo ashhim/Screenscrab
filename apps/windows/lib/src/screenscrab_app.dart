@@ -70,6 +70,8 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
   EngineCapabilities? _capabilities;
   NetworkRuntimeStatus _tailnetStatus = const NetworkRuntimeStatus(
     mode: 'signed_out',
+    state: 'offline',
+    connectionState: 'disconnected',
     loginUrl: '',
     identity: NetworkIdentity(deviceName: 'Screenscrab Host'),
     peers: <NetworkPeer>[],
@@ -155,6 +157,18 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
                   : (_status.lastErrorMessage.isEmpty
                       ? 'signed_out'
                       : 'signing_in'),
+          state:
+              _status.sessionActive || _status.tailscaleReachable
+                  ? 'signed_in'
+                  : (_status.lastErrorMessage.isEmpty
+                      ? 'signed_out'
+                      : 'signing_in'),
+          connectionState:
+              _status.sessionActive || _status.tailscaleReachable
+                  ? 'connected'
+                  : (_status.lastErrorMessage.isEmpty
+                      ? 'disconnected'
+                      : 'connecting'),
           loginUrl:
               _status.endpoint.isEmpty ? '' : 'tailscale://${_status.endpoint}',
           identity: NetworkIdentity(
@@ -370,6 +384,8 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
                   ],
                   const SizedBox(height: 8),
                   Text('Identity: ${_tailnetStatus.identity.deviceName}'),
+                  Text('Runtime state: ${_tailnetStatus.state}'),
+                  Text('Connection state: ${_tailnetStatus.connectionState}'),
                   Text(
                     'Account: ${_tailnetStatus.identity.accountEmail.isEmpty ? 'pending' : _tailnetStatus.identity.accountEmail}',
                   ),

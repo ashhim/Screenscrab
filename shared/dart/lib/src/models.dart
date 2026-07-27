@@ -191,6 +191,8 @@ class NetworkPeer {
 class NetworkRuntimeStatus {
   const NetworkRuntimeStatus({
     required this.mode,
+    required this.state,
+    required this.connectionState,
     required this.loginUrl,
     required this.identity,
     required this.peers,
@@ -198,6 +200,8 @@ class NetworkRuntimeStatus {
   });
 
   final String mode;
+  final String state;
+  final String connectionState;
   final String loginUrl;
   final NetworkIdentity identity;
   final List<NetworkPeer> peers;
@@ -205,8 +209,20 @@ class NetworkRuntimeStatus {
 
   factory NetworkRuntimeStatus.fromJson(Map<String, dynamic> json) {
     final List<dynamic>? rawPeers = json['peers'] as List<dynamic>?;
+    final String stateValue = (json['state'] as String?) ?? '';
+    final String modeValue = (json['mode'] as String?) ?? 'signed_out';
+    final String resolvedState = stateValue.isEmpty ? modeValue : stateValue;
+    final String resolvedConnectionState =
+        (json['connectionState'] as String?) ??
+        (resolvedState == 'connected' || resolvedState == 'signed_in'
+            ? 'connected'
+            : (resolvedState == 'signing_in' || resolvedState == 'retrying'
+                ? 'connecting'
+                : 'disconnected'));
     return NetworkRuntimeStatus(
-      mode: json['mode'] as String? ?? 'signed_out',
+      mode: modeValue,
+      state: resolvedState,
+      connectionState: resolvedConnectionState,
       loginUrl: json['loginUrl'] as String? ?? '',
       identity: NetworkIdentity.fromJson(
         json['identity'] as Map<String, dynamic>? ?? <String, dynamic>{},

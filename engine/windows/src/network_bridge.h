@@ -63,6 +63,7 @@ class NetworkBridge {
   TailnetIdentity identity_{};
   std::vector<TailnetPeer> peers_{};
   std::string login_url_{};
+  std::string runtime_state_{"offline"};
   std::string last_error_message_{"embedded networking not yet linked"};
   bool started_{false};
 };

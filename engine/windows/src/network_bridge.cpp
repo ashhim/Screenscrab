@@ -246,6 +246,7 @@ void NetworkBridge::stop() {
   started_ = false;
   peers_.clear();
   identity_ = TailnetIdentity{};
+  runtime_state_ = "offline";
 }
 
 bool NetworkBridge::begin_sign_in() {
@@ -357,7 +358,16 @@ std::vector<TailnetPeer> NetworkBridge::peers() const {
 std::string NetworkBridge::status_json() const {
   std::scoped_lock lock(mutex_);
   std::ostringstream out;
+  const std::string runtime_state = runtime_state_.empty() ? (identity_.signed_in ? "signed_in" : "signed_out") : runtime_state_;
+  const std::string connection_state =
+      runtime_state == "connected" || runtime_state == "signed_in"
+          ? "connected"
+          : (runtime_state == "signing_in" || runtime_state == "retrying" || runtime_state == "connecting"
+                ? "connecting"
+                : "disconnected");
   out << "{\"mode\":\"" << (identity_.signed_in ? "signed_in" : "signed_out") << "\""
+      << ",\"state\":\"" << escape_json_string(runtime_state) << "\""
+      << ",\"connectionState\":\"" << escape_json_string(connection_state) << "\""
       << ",\"loginUrl\":\"" << escape_json_string(login_url_) << "\""
       << ",\"identity\":{\"accountEmail\":\"" << escape_json_string(identity_.account_email) << "\""
       << ",\"tailnetName\":\"" << escape_json_string(identity_.tailnet_name) << "\""
@@ -393,13 +403,15 @@ void NetworkBridge::set_runtime_state(const NativeStatus& runtime_state) {
   identity_ = runtime_state.identity;
   peers_ = runtime_state.peers;
   login_url_ = runtime_state.login_url;
-  started_ = runtime_state.state != "offline";
-  last_error_message_ = runtime_state.last_error.empty() ? runtime_state.state : runtime_state.last_error;
+  runtime_state_ = runtime_state.state.empty() ? (runtime_state.identity.signed_in ? "signed_in" : "signed_out") : runtime_state.state;
+  started_ = runtime_state_.find("offline") == std::string::npos;
+  last_error_message_ = runtime_state.last_error.empty() ? runtime_state_ : runtime_state.last_error;
 }
 
 void NetworkBridge::update_error(const std::string& error) {
   std::scoped_lock lock(mutex_);
   last_error_message_ = error;
+  runtime_state_ = "error";
   started_ = false;
 }
 
