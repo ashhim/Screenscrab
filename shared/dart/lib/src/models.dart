@@ -119,6 +119,88 @@ class EngineCapabilities {
 }
 
 @immutable
+class NetworkPeer {
+  const NetworkPeer({
+    required this.nodeId,
+    required this.name,
+    required this.address,
+    required this.platform,
+    required this.online,
+    required this.latencyMs,
+    required this.quality,
+  });
+
+  final String nodeId;
+  final String name;
+  final String address;
+  final String platform;
+  final bool online;
+  final int latencyMs;
+  final int quality;
+
+  factory NetworkPeer.fromJson(Map<String, dynamic> json) {
+    return NetworkPeer(
+      nodeId: (json['nodeId'] as String?) ?? '',
+      name: (json['name'] as String?) ?? '',
+      address: (json['address'] as String?) ?? '',
+      platform: (json['platform'] as String?) ?? '',
+      online: json['online'] as bool? ?? false,
+      latencyMs: (json['latencyMs'] as num?)?.toInt() ?? 0,
+      quality: (json['quality'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+@immutable
+class NetworkRuntimeStatus {
+  const NetworkRuntimeStatus({
+    required this.started,
+    required this.signedIn,
+    required this.accountEmail,
+    required this.tailnetName,
+    required this.deviceName,
+    required this.deviceId,
+    required this.tailscaleIp,
+    required this.peerCount,
+    required this.loginUrl,
+    required this.lastErrorMessage,
+    required this.peers,
+  });
+
+  final bool started;
+  final bool signedIn;
+  final String accountEmail;
+  final String tailnetName;
+  final String deviceName;
+  final String deviceId;
+  final String tailscaleIp;
+  final int peerCount;
+  final String loginUrl;
+  final String lastErrorMessage;
+  final List<NetworkPeer> peers;
+
+  factory NetworkRuntimeStatus.fromJson(Map<String, dynamic> json) {
+    final List<dynamic> peerList = json['peers'] as List<dynamic>? ?? <dynamic>[];
+    return NetworkRuntimeStatus(
+      started: json['started'] as bool? ?? false,
+      signedIn: json['signedIn'] as bool? ?? false,
+      accountEmail: (json['accountEmail'] as String?) ?? '',
+      tailnetName: (json['tailnetName'] as String?) ?? '',
+      deviceName: (json['deviceName'] as String?) ?? '',
+      deviceId: (json['deviceId'] as String?) ?? '',
+      tailscaleIp: (json['tailscaleIp'] as String?) ?? '',
+      peerCount: (json['peerCount'] as num?)?.toInt() ?? peerList.length,
+      loginUrl: (json['loginUrl'] as String?) ?? '',
+      lastErrorMessage: (json['lastErrorMessage'] as String?) ?? '',
+      peers: peerList
+          .whereType<Map<String, dynamic>>()
+          .map(NetworkPeer.fromJson)
+          .toList(),
+    );
+  }
+}
+
+@immutable
 class DeviceEndpoint {
   const DeviceEndpoint({
     required this.deviceId,
