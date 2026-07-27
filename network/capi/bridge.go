@@ -21,6 +21,7 @@ import (
 	"screenscrab.network/internal/api"
 
 	"tailscale.com/client/local"
+	"tailscale.com/ipn"
 	"tailscale.com/ipn/ipnstate"
 	"tailscale.com/tsnet"
 )
@@ -39,6 +40,7 @@ type runtimeState struct {
 	nextID    uint64
 	conns     map[uint64]*connHandle
 	status    api.Status
+	watcher   *local.IPNBusWatcher
 }
 
 var state = &runtimeState{
@@ -129,6 +131,21 @@ func toStatusJSON(st *ipnstate.Status, authURL, lastError string) api.Status {
 	return status
 }
 
+func applyNotify(current api.Status, authURL, lastError string, notify ipn.Notify) api.Status {
+	if notify.BrowseToURL != nil && *notify.BrowseToURL != "" {
+		authURL = *notify.BrowseToURL
+	}
+	if notify.InitialStatus != nil {
+		current = toStatusJSON(notify.InitialStatus, authURL, lastError)
+	} else if notify.State != nil {
+		current.State = api.State(notify.State.String())
+	}
+	if current.State == api.SignedIn || current.State == api.SigningIn || current.State == api.Connected || current.State == api.Retrying {
+		current.LoginURL = authURL
+	}
+	return current
+}
+
 func (r *runtimeState) refreshLocked(ctx context.Context) {
 	if r.local == nil {
 		r.status.State = api.Offline
@@ -142,6 +159,51 @@ func (r *runtimeState) refreshLocked(ctx context.Context) {
 		return
 	}
 	r.status = toStatusJSON(st, r.authURL, r.lastError)
+}
+
+func (r *runtimeState) watchIPNLocked(ctx context.Context) error {
+	if r.local == nil || r.watcher != nil {
+		return nil
+	}
+	watcher, err := r.local.WatchIPNBus(ctx, 0)
+	if err != nil {
+		return err
+	}
+	r.watcher = watcher
+	go func() {
+		for {
+			notify, err := watcher.Next()
+			if err != nil {
+				return
+			}
+			r.mu.Lock()
+			if r.local == nil {
+				r.mu.Unlock()
+				return
+			}
+			if notify.BrowseToURL != nil && *notify.BrowseToURL != "" {
+				r.authURL = *notify.BrowseToURL
+			}
+			if notify.InitialStatus != nil {
+				r.status = toStatusJSON(notify.InitialStatus, r.authURL, r.lastError)
+			} else if notify.State != nil {
+				r.status.State = api.State(notify.State.String())
+			}
+			if r.status.State == api.SignedIn || r.status.State == api.SigningIn || r.status.State == api.Connected || r.status.State == api.Retrying {
+				r.status.LoginURL = r.authURL
+			}
+			if r.status.State == api.SignedIn && r.status.Identity.SignedIn == false && notify.InitialStatus != nil && notify.InitialStatus.Self != nil {
+				r.status.Identity.SignedIn = true
+			}
+			if r.watcher == watcher {
+				if r.status.State == api.SignedIn {
+					r.status.LastError = ""
+				}
+			}
+			r.mu.Unlock()
+		}
+	}()
+	return nil
 }
 
 func (r *runtimeState) startLocked() error {
@@ -172,8 +234,22 @@ func (r *runtimeState) startLocked() error {
 	r.server = srv
 	r.local = lc
 	r.started = true
+	if err := r.watchIPNLocked(context.Background()); err != nil {
+		_ = srv.Close()
+		r.server = nil
+		r.local = nil
+		r.started = false
+		return err
+	}
+	if err := lc.StartLoginInteractive(context.Background()); err != nil {
+		r.lastError = err.Error()
+		r.status.State = api.Error
+		r.status.LastError = r.lastError
+		return err
+	}
 	r.status.State = api.SigningIn
 	r.status.LastError = ""
+	r.status.LoginURL = r.authURL
 	return nil
 }
 
@@ -198,6 +274,14 @@ func (r *runtimeState) stopLocked() {
 	}
 	if r.server != nil {
 		_ = r.server.Close()
+	}
+	if r.watcher != nil {
+		_ = r.watcher.Close()
+		r.watcher = nil
+	}
+	if r.watcher != nil {
+		_ = r.watcher.Close()
+		r.watcher = nil
 	}
 	r.server = nil
 	r.local = nil
