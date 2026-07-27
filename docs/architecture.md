@@ -18,7 +18,9 @@ Screenscrab is split into three layers:
 
 ## Network model
 
-The application assumes both endpoints are reachable on the same Tailscale network.
+The application is being migrated to an embedded tailnet networking layer so the end-user does not need a separate Tailscale installation.
+
+The current repository includes a network bridge seam for a Go `tsnet` runtime. Until that runtime is linked in, the C++ engine still uses a local transport stub for buildability. The long-term target is to replace the socket transport with the embedded tailnet transport without changing the capture/encode/session engine above it.
 No relay service, public backend, or account database is introduced by Screenscrab.
 
 ## Windows runtime

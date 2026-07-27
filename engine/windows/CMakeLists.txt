@@ -15,6 +15,7 @@ add_library(screencrab_engine SHARED
   src/logging.cpp
   src/engine_state.cpp
   src/input_injector.cpp
+  src/network_bridge.cpp
   src/session_manager.cpp
   src/transfer_service.cpp
   src/transport.cpp
