@@ -36,7 +36,9 @@ class WindowsHomePage extends StatefulWidget {
 
 class _WindowsHomePageState extends State<WindowsHomePage> {
   final ScreenscrabEngineBridge _engine = ScreenscrabEngineBridge();
-  final TextEditingController _deviceNameController = TextEditingController(text: 'Screenscrab Host');
+  final TextEditingController _deviceNameController = TextEditingController(
+    text: 'Screenscrab Host',
+  );
   final List<DeviceEndpoint> _devices = <DeviceEndpoint>[];
 
   Timer? _pollTimer;
@@ -85,7 +87,10 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
     super.initState();
     if (widget.enableDiagnostics) {
       _bootstrap();
-      _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) => _refreshDiagnostics());
+      _pollTimer = Timer.periodic(
+        const Duration(seconds: 2),
+        (_) => _refreshDiagnostics(),
+      );
     }
   }
 
@@ -112,7 +117,10 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
     bool tailscalePresent = false;
 
     try {
-      final ProcessResult result = await Process.run('tailscale', <String>['status', '--json']);
+      final ProcessResult result = await Process.run('tailscale', <String>[
+        'status',
+        '--json',
+      ]);
       tailscalePresent = result.exitCode == 0;
     } on ProcessException {
       tailscalePresent = false;
@@ -125,7 +133,10 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
     setState(() {
       if (status != null) {
         _status = status;
-        _connectionState = status.sessionActive ? ConnectionStateValue.connected : ConnectionStateValue.disconnected;
+        _connectionState =
+            status.sessionActive
+                ? ConnectionStateValue.connected
+                : ConnectionStateValue.disconnected;
       }
       _engineVersion = version;
       _apiVersion = apiVersion;
@@ -134,19 +145,35 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
       _diagnosticMessage = message;
       _tailscaleCommandPresent = tailscalePresent;
       _tailnetStatus = TailnetRuntimeStatus(
-        mode: _status.sessionActive || _status.tailscaleReachable ? 'signed_in' : (_status.lastErrorMessage.isEmpty ? 'signed_out' : 'signing_in'),
-        loginUrl: _status.endpoint.isEmpty ? '' : 'tailscale://${_status.endpoint}',
+        mode:
+            _status.sessionActive || _status.tailscaleReachable
+                ? 'signed_in'
+                : (_status.lastErrorMessage.isEmpty
+                    ? 'signed_out'
+                    : 'signing_in'),
+        loginUrl:
+            _status.endpoint.isEmpty ? '' : 'tailscale://${_status.endpoint}',
         identity: TailnetIdentity(
-          deviceName: _deviceNameController.text.trim().isEmpty ? 'Screenscrab Host' : _deviceNameController.text.trim(),
+          deviceName:
+              _deviceNameController.text.trim().isEmpty
+                  ? 'Screenscrab Host'
+                  : _deviceNameController.text.trim(),
           deviceId: _engineVersion,
           signedIn: _status.sessionActive || _status.tailscaleReachable,
         ),
-        peers: _devices.map((DeviceEndpoint device) => TailnetPeer(
-              name: device.name,
-              address: device.address,
-              online: true,
-            )).toList(growable: false),
-        lastError: _status.lastErrorMessage.isEmpty ? _diagnosticMessage : _status.lastErrorMessage,
+        peers: _devices
+            .map(
+              (DeviceEndpoint device) => TailnetPeer(
+                name: device.name,
+                address: device.address,
+                online: true,
+              ),
+            )
+            .toList(growable: false),
+        lastError:
+            _status.lastErrorMessage.isEmpty
+                ? _diagnosticMessage
+                : _status.lastErrorMessage,
       );
     });
   }
@@ -156,7 +183,9 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
     try {
       if (_mode == AppMode.host) {
         await _engine.startHost(
-          _deviceNameController.text.trim().isEmpty ? 'Screenscrab Host' : _deviceNameController.text.trim(),
+          _deviceNameController.text.trim().isEmpty
+              ? 'Screenscrab Host'
+              : _deviceNameController.text.trim(),
         );
       } else {
         await _engine.startClient('screenscrab-peer', 4545);
@@ -208,27 +237,29 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
             final Widget rightColumn = _buildStatusPanel(theme);
             return isWide
                 ? Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Expanded(flex: 3, child: leftColumn),
-                      const SizedBox(width: 16),
-                      Expanded(flex: 2, child: rightColumn),
-                    ],
-                  )
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Expanded(flex: 3, child: leftColumn),
+                    const SizedBox(width: 16),
+                    Expanded(flex: 2, child: rightColumn),
+                  ],
+                )
                 : ListView(
-                    children: <Widget>[
-                      leftColumn,
-                      const SizedBox(height: 16),
-                      rightColumn,
-                    ],
-                  );
+                  children: <Widget>[
+                    leftColumn,
+                    const SizedBox(height: 16),
+                    rightColumn,
+                  ],
+                );
           },
         ),
       ),
       bottomNavigationBar: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          border: Border(top: BorderSide(color: theme.colorScheme.outlineVariant)),
+          border: Border(
+            top: BorderSide(color: theme.colorScheme.outlineVariant),
+          ),
         ),
         child: Text(
           'Version $_engineVersion | API ${_status.apiVersion} | Wire ${_status.protocolVersion} | Engine ${_status.engineLoaded ? 'loaded' : 'unloaded'} | Transport ${_status.transportState}',
@@ -249,11 +280,18 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
             const SizedBox(height: 12),
             SegmentedButton<AppMode>(
               segments: const <ButtonSegment<AppMode>>[
-                ButtonSegment<AppMode>(value: AppMode.host, label: Text('Host')),
-                ButtonSegment<AppMode>(value: AppMode.client, label: Text('Client')),
+                ButtonSegment<AppMode>(
+                  value: AppMode.host,
+                  label: Text('Host'),
+                ),
+                ButtonSegment<AppMode>(
+                  value: AppMode.client,
+                  label: Text('Client'),
+                ),
               ],
               selected: <AppMode>{_mode},
-              onSelectionChanged: (Set<AppMode> value) => setState(() => _mode = value.first),
+              onSelectionChanged:
+                  (Set<AppMode> value) => setState(() => _mode = value.first),
             ),
             const SizedBox(height: 16),
             TextField(
@@ -285,7 +323,8 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               value: _clipboardEnabled,
-              onChanged: (bool value) => setState(() => _clipboardEnabled = value),
+              onChanged:
+                  (bool value) => setState(() => _clipboardEnabled = value),
               title: const Text('Clipboard sync'),
             ),
             const SizedBox(height: 16),
@@ -309,7 +348,9 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
               width: double.infinity,
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: theme.colorScheme.primaryContainer.withValues(alpha: 0.35),
+                color: theme.colorScheme.primaryContainer.withValues(
+                  alpha: 0.35,
+                ),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Column(
@@ -328,7 +369,11 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
                       FilledButton.icon(
                         onPressed: _busy ? null : _startSession,
                         icon: const Icon(Icons.login),
-                        label: Text(_tailnetStatus.identity.signedIn ? 'Refresh' : 'Sign in'),
+                        label: Text(
+                          _tailnetStatus.identity.signedIn
+                              ? 'Refresh'
+                              : 'Sign in',
+                        ),
                       ),
                       const SizedBox(width: 12),
                       OutlinedButton.icon(
@@ -370,25 +415,42 @@ class _WindowsHomePageState extends State<WindowsHomePage> {
               children: <Widget>[
                 _StatusChip(label: 'Loaded', value: _status.engineLoaded),
                 _StatusChip(label: 'Session', value: _status.sessionActive),
-                _StatusChip(label: 'Tailnet', value: _status.tailscaleReachable || _tailscaleCommandPresent),
+                _StatusChip(
+                  label: 'Tailnet',
+                  value: _status.tailscaleReachable || _tailscaleCommandPresent,
+                ),
                 _StatusChip(label: 'Capture', value: _status.captureActive),
                 _StatusChip(label: 'Input', value: _status.inputEnabled),
-                _StatusChip(label: 'Clipboard', value: _status.clipboardEnabled),
+                _StatusChip(
+                  label: 'Clipboard',
+                  value: _status.clipboardEnabled,
+                ),
                 _StatusChip(label: 'Audio', value: _status.audioEnabled),
               ],
             ),
             const SizedBox(height: 8),
-            Text('API v$_apiVersion | Wire v$_protocolVersion | Encoder ${_status.encoder}'),
+            Text(
+              'API v$_apiVersion | Wire v$_protocolVersion | Encoder ${_status.encoder}',
+            ),
             const SizedBox(height: 16),
             ListTile(
               contentPadding: EdgeInsets.zero,
-              leading: CircleAvatar(backgroundColor: accent, child: const Icon(Icons.settings_ethernet)),
+              leading: CircleAvatar(
+                backgroundColor: accent,
+                child: const Icon(Icons.settings_ethernet),
+              ),
               title: Text('Mode: ${_status.mode}'),
-              subtitle: Text('Transport ${_status.transportState} | Monitor ${_status.monitorIndex + 1} | Frames ${_status.framesSent}'),
+              subtitle: Text(
+                'Transport ${_status.transportState} | Monitor ${_status.monitorIndex + 1} | Frames ${_status.framesSent}',
+              ),
             ),
-            Text('Native message: ${_status.lastErrorMessage.isEmpty ? _diagnosticMessage : _status.lastErrorMessage}'),
+            Text(
+              'Native message: ${_status.lastErrorMessage.isEmpty ? _diagnosticMessage : _status.lastErrorMessage}',
+            ),
             Text('UI state: ${_connectionState.name}'),
-            Text('Endpoint: ${_status.endpoint.isEmpty ? 'local' : _status.endpoint}'),
+            Text(
+              'Endpoint: ${_status.endpoint.isEmpty ? 'local' : _status.endpoint}',
+            ),
             if (_capabilities != null) ...<Widget>[
               const SizedBox(height: 8),
               Wrap(

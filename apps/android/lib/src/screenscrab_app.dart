@@ -115,17 +115,26 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
       _clipboardController.text = clipboard;
       _framesReceived = _client.framesReceived;
       _tailnetStatus = TailnetRuntimeStatus(
-        mode: _state == ConnectionStateValue.connected ? 'signed_in' : (_state == ConnectionStateValue.connecting ? 'signing_in' : 'signed_out'),
+        mode:
+            _state == ConnectionStateValue.connected
+                ? 'signed_in'
+                : (_state == ConnectionStateValue.connecting
+                    ? 'signing_in'
+                    : 'signed_out'),
         loginUrl: '',
         identity: TailnetIdentity(
           deviceName: 'Screenscrab Android',
           signedIn: _state == ConnectionStateValue.connected,
         ),
-        peers: _hosts.map((DeviceEndpoint device) => TailnetPeer(
-              name: device.name,
-              address: device.address,
-              online: true,
-            )).toList(growable: false),
+        peers: _hosts
+            .map(
+              (DeviceEndpoint device) => TailnetPeer(
+                name: device.name,
+                address: device.address,
+                online: true,
+              ),
+            )
+            .toList(growable: false),
         lastError: _lastStatus,
       );
     });
@@ -177,20 +186,38 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
     });
   }
 
-  Future<void> _sendTouch(Offset localPosition, String action, Size surfaceSize) async {
+  Future<void> _sendTouch(
+    Offset localPosition,
+    String action,
+    Size surfaceSize,
+  ) async {
     if (action == 'wheel') {
       await _client.sendWheel(delta: 120);
     } else if (action == 'down') {
-      await _client.sendMouseButton(localPosition: localPosition, surfaceSize: surfaceSize, down: true, button: 1);
+      await _client.sendMouseButton(
+        localPosition: localPosition,
+        surfaceSize: surfaceSize,
+        down: true,
+        button: 1,
+      );
     } else if (action == 'up') {
-      await _client.sendMouseButton(localPosition: localPosition, surfaceSize: surfaceSize, down: false, button: 1);
+      await _client.sendMouseButton(
+        localPosition: localPosition,
+        surfaceSize: surfaceSize,
+        down: false,
+        button: 1,
+      );
     } else {
       await _client.sendMousePosition(localPosition, surfaceSize);
     }
     if (!mounted) {
       return;
     }
-    setState(() => _lastAction = 'Touch $action at ${localPosition.dx.toStringAsFixed(0)}, ${localPosition.dy.toStringAsFixed(0)}');
+    setState(
+      () =>
+          _lastAction =
+              'Touch $action at ${localPosition.dx.toStringAsFixed(0)}, ${localPosition.dy.toStringAsFixed(0)}',
+    );
   }
 
   int _windowsVirtualKey(LogicalKeyboardKey key) {
@@ -215,9 +242,14 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
     if (key == LogicalKeyboardKey.end) return 0x23;
     if (key == LogicalKeyboardKey.pageUp) return 0x21;
     if (key == LogicalKeyboardKey.pageDown) return 0x22;
-    if (key == LogicalKeyboardKey.shiftLeft || key == LogicalKeyboardKey.shiftRight) return 0x10;
-    if (key == LogicalKeyboardKey.controlLeft || key == LogicalKeyboardKey.controlRight) return 0x11;
-    if (key == LogicalKeyboardKey.altLeft || key == LogicalKeyboardKey.altRight) return 0x12;
+    if (key == LogicalKeyboardKey.shiftLeft ||
+        key == LogicalKeyboardKey.shiftRight)
+      return 0x10;
+    if (key == LogicalKeyboardKey.controlLeft ||
+        key == LogicalKeyboardKey.controlRight)
+      return 0x11;
+    if (key == LogicalKeyboardKey.altLeft || key == LogicalKeyboardKey.altRight)
+      return 0x12;
     return 0;
   }
 
@@ -240,16 +272,29 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
             }
           },
           child: GestureDetector(
-            onTapDown: (TapDownDetails details) => _sendTouch(details.localPosition, 'down', surfaceSize),
-            onTapUp: (TapUpDetails details) => _sendTouch(details.localPosition, 'up', surfaceSize),
-            onPanDown: (DragDownDetails details) => _sendTouch(details.localPosition, 'down', surfaceSize),
-            onPanUpdate: (DragUpdateDetails details) => _sendTouch(details.localPosition, 'move', surfaceSize),
-            onSecondaryTapDown: (TapDownDetails details) => _sendTouch(details.localPosition, 'down', surfaceSize),
+            onTapDown:
+                (TapDownDetails details) =>
+                    _sendTouch(details.localPosition, 'down', surfaceSize),
+            onTapUp:
+                (TapUpDetails details) =>
+                    _sendTouch(details.localPosition, 'up', surfaceSize),
+            onPanDown:
+                (DragDownDetails details) =>
+                    _sendTouch(details.localPosition, 'down', surfaceSize),
+            onPanUpdate:
+                (DragUpdateDetails details) =>
+                    _sendTouch(details.localPosition, 'move', surfaceSize),
+            onSecondaryTapDown:
+                (TapDownDetails details) =>
+                    _sendTouch(details.localPosition, 'down', surfaceSize),
             child: Container(
               height: 280,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: <Color>[theme.colorScheme.primaryContainer, theme.colorScheme.surfaceContainerHighest],
+                  colors: <Color>[
+                    theme.colorScheme.primaryContainer,
+                    theme.colorScheme.surfaceContainerHighest,
+                  ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -258,7 +303,7 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(20),
-              child: Stack(
+                child: Stack(
                   fit: StackFit.expand,
                   children: <Widget>[
                     AndroidView(
@@ -270,13 +315,20 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
                       top: 12,
                       child: DecoratedBox(
                         decoration: BoxDecoration(
-                          color: theme.colorScheme.surface.withValues(alpha: 0.78),
+                          color: theme.colorScheme.surface.withValues(
+                            alpha: 0.78,
+                          ),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
                           child: Text(
-                            _state == ConnectionStateValue.connected ? 'Live remote display' : 'Connect to stream the desktop',
+                            _state == ConnectionStateValue.connected
+                                ? 'Live remote display'
+                                : 'Connect to stream the desktop',
                           ),
                         ),
                       ),
@@ -298,10 +350,7 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
       appBar: AppBar(
         title: const Text('Screenscrab Android'),
         actions: <Widget>[
-          IconButton(
-            onPressed: _refresh,
-            icon: const Icon(Icons.refresh),
-          ),
+          IconButton(onPressed: _refresh, icon: const Icon(Icons.refresh)),
         ],
       ),
       body: ListView(
@@ -320,9 +369,18 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
                     runSpacing: 8,
                     children: <Widget>[
                       _StatusPill(label: 'State', value: _state.name),
-                      _StatusPill(label: 'Audio', value: _audioEnabled ? 'enabled' : 'off'),
-                      _StatusPill(label: 'Clipboard', value: _clipboardSyncEnabled ? 'enabled' : 'off'),
-                      _StatusPill(label: 'Frames', value: _framesReceived.toString()),
+                      _StatusPill(
+                        label: 'Audio',
+                        value: _audioEnabled ? 'enabled' : 'off',
+                      ),
+                      _StatusPill(
+                        label: 'Clipboard',
+                        value: _clipboardSyncEnabled ? 'enabled' : 'off',
+                      ),
+                      _StatusPill(
+                        label: 'Frames',
+                        value: _framesReceived.toString(),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -340,7 +398,10 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text('Embedded tailnet', style: theme.textTheme.headlineSmall),
+                  Text(
+                    'Embedded tailnet',
+                    style: theme.textTheme.headlineSmall,
+                  ),
                   const SizedBox(height: 12),
                   Text(
                     _tailnetStatus.identity.signedIn
@@ -398,7 +459,9 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
                     controller: _clipboardController,
                     minLines: 2,
                     maxLines: 5,
-                    decoration: const InputDecoration(labelText: 'Clipboard text'),
+                    decoration: const InputDecoration(
+                      labelText: 'Clipboard text',
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text('Last clipboard from host: $_clipboardText'),
@@ -413,19 +476,30 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text('Discovered hosts', style: theme.textTheme.headlineSmall),
+                  Text(
+                    'Discovered hosts',
+                    style: theme.textTheme.headlineSmall,
+                  ),
                   const SizedBox(height: 12),
                   if (_hosts.isEmpty)
-                    Text('Peers will appear here after the embedded runtime discovers them.')
+                    Text(
+                      'Peers will appear here after the embedded runtime discovers them.',
+                    )
                   else
                     for (final DeviceEndpoint device in _hosts)
                       ListTile(
                         contentPadding: EdgeInsets.zero,
                         leading: const Icon(Icons.computer),
                         title: Text(device.name),
-                        subtitle: Text('${device.address} | ${device.mode.name}'),
+                        subtitle: Text(
+                          '${device.address} | ${device.mode.name}',
+                        ),
                         trailing: FilledButton.tonal(
-                          onPressed: () => _client.connect(host: device.address, port: 4545),
+                          onPressed:
+                              () => _client.connect(
+                                host: device.address,
+                                port: 4545,
+                              ),
                           child: const Text('Open'),
                         ),
                       ),
@@ -451,7 +525,9 @@ class _AndroidHomePageState extends State<AndroidHomePage> {
               Expanded(
                 child: SwitchListTile(
                   value: _clipboardSyncEnabled,
-                  onChanged: (bool value) => setState(() => _clipboardSyncEnabled = value),
+                  onChanged:
+                      (bool value) =>
+                          setState(() => _clipboardSyncEnabled = value),
                   title: const Text('Clipboard sync'),
                 ),
               ),

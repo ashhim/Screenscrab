@@ -2,7 +2,13 @@ import 'package:meta/meta.dart';
 
 enum AppMode { host, client }
 
-enum ConnectionStateValue { disconnected, connecting, connected, reconnecting, error }
+enum ConnectionStateValue {
+  disconnected,
+  connecting,
+  connected,
+  reconnecting,
+  error,
+}
 
 enum MonitorSelectionMode { primary, specific, all }
 
@@ -202,10 +208,18 @@ class TailnetRuntimeStatus {
     return TailnetRuntimeStatus(
       mode: json['mode'] as String? ?? 'signed_out',
       loginUrl: json['loginUrl'] as String? ?? '',
-      identity: TailnetIdentity.fromJson(json['identity'] as Map<String, dynamic>? ?? <String, dynamic>{}),
-      peers: rawPeers == null
-          ? const <TailnetPeer>[]
-          : rawPeers.map((dynamic entry) => TailnetPeer.fromJson(entry as Map<String, dynamic>)).toList(growable: false),
+      identity: TailnetIdentity.fromJson(
+        json['identity'] as Map<String, dynamic>? ?? <String, dynamic>{},
+      ),
+      peers:
+          rawPeers == null
+              ? const <TailnetPeer>[]
+              : rawPeers
+                  .map(
+                    (dynamic entry) =>
+                        TailnetPeer.fromJson(entry as Map<String, dynamic>),
+                  )
+                  .toList(growable: false),
       lastError: json['lastError'] as String? ?? '',
     );
   }
@@ -227,9 +241,18 @@ class DeviceEndpoint {
   final AppMode mode;
   final DateTime lastSeenUtc;
 
-  factory DeviceEndpoint.fromTailnetPeer(TailnetPeer peer, {String? deviceId, AppMode mode = AppMode.host}) {
-    final String resolvedName = peer.name.isEmpty ? (peer.address.isEmpty ? 'Peer' : peer.address) : peer.name;
-    final String resolvedDeviceId = deviceId ?? (peer.nodeId.isEmpty ? 'peer-${peer.address}' : peer.nodeId);
+  factory DeviceEndpoint.fromTailnetPeer(
+    TailnetPeer peer, {
+    String? deviceId,
+    AppMode mode = AppMode.host,
+  }) {
+    final String resolvedName =
+        peer.name.isEmpty
+            ? (peer.address.isEmpty ? 'Peer' : peer.address)
+            : peer.name;
+    final String resolvedDeviceId =
+        deviceId ??
+        (peer.nodeId.isEmpty ? 'peer-${peer.address}' : peer.nodeId);
     return DeviceEndpoint(
       deviceId: resolvedDeviceId,
       name: resolvedName,
